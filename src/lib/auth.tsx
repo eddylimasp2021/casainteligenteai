@@ -9,6 +9,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({ session: null, user: null, loading: true });
 
   useEffect(() => {
+    // "Lembrar sessão" desmarcado: encerra a sessão quando o navegador foi fechado.
+    if (localStorage.getItem("hp-no-remember") && !sessionStorage.getItem("hp-alive")) {
+      localStorage.removeItem("hp-no-remember");
+      void supabase.auth.signOut();
+    }
     const { data } = supabase.auth.onAuthStateChange((_e, session) => {
       setState({ session, user: session?.user ?? null, loading: false });
     });

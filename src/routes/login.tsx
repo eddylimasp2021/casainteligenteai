@@ -46,7 +46,8 @@ function LoginPage() {
       if (mode === "signin") {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        if (!remember) sessionStorage.setItem("hp-ephemeral", "1");
+        if (remember) localStorage.removeItem("hp-no-remember");
+        else { localStorage.setItem("hp-no-remember", "1"); sessionStorage.setItem("hp-alive", "1"); }
       } else if (mode === "signup") {
         const { data, error } = await supabase.auth.signUp({
           email, password,
