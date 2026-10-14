@@ -61,7 +61,7 @@ export function DeviceFormDialog({ open, onOpenChange, householdId, rooms, devic
           <div className="grid gap-2"><Label htmlFor="dn">Nome</Label><Input id="dn" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Luz da sala" required /></div>
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-2"><Label>Categoria</Label>
-              <Select value={f.category} onValueChange={(v) => setF({ ...f, category: v, device_type: Object.keys(CATEGORIES[v].types)[0] })}>
+              <Select value={f.category} onValueChange={(v) => setF({ ...f, category: v, device_type: Object.keys(CATEGORIES[v]?.types ?? {})[0] ?? "" })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{Object.entries(CATEGORIES).map(([k, c]) => <SelectItem key={k} value={k}>{c.label}</SelectItem>)}</SelectContent>
               </Select>

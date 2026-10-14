@@ -54,7 +54,7 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   pairing: { label: "Pareando", cls: "bg-cyan/15 text-cyan" },
 };
 export function StatusBadge({ status }: { status: string }) {
-  const s = STATUS[status] ?? STATUS.unavailable;
+  const s = STATUS[status] ?? STATUS["unavailable"]!;
   return (
     <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium", s.cls)}>
       <span className="size-1.5 rounded-full bg-current" aria-hidden />
