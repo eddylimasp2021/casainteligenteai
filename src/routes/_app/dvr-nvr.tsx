@@ -726,8 +726,9 @@ function DvrNvrPage() {
         cameras={cameras}
         open={isCameraManagerOpen}
         onOpenChange={setIsCameraManagerOpen}
-        onAddCamera={(cam) => setCameras((prev) => [...prev, cam])}
-        onDeleteCamera={(id) => setCameras((prev) => prev.filter((c) => c.id !== id))}
+        onSaveCamera={handleSaveCamera}
+        existingCamera={cameraToEdit}
+        onDeleteCamera={handleDeleteCamera}
       />
 
       {ptzCamera && (
