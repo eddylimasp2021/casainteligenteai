@@ -43,7 +43,7 @@ function GatewaysPage() {
     queryKey: ["iot-gateways", current?.id],
     enabled: !!current,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from("iot_gateways")
         .select("*")
         .eq("household_id", current!.id)
