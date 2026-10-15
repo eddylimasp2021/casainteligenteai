@@ -104,7 +104,7 @@ describe("Auditoria e Validação do Backend IoT (Fase 1 / Etapa 1)", () => {
     const filteredForUser = commands.filter((c) => userHouseholdMembership.includes(c.householdId));
 
     expect(filteredForUser).toHaveLength(1);
-    expect(filteredForUser[0].commandId).toBe("cmd-1");
+    expect(filteredForUser[0]!.commandId).toBe("cmd-1");
     expect(filteredForUser.some((c) => c.householdId === houseB)).toBe(false);
   });
 

@@ -24,7 +24,7 @@ export function TimelinePlayback({ cameras, selectedCameraId, onSelectCamera }: 
   const [isClipping, setIsClipping] = useState(false);
   const [clipStart, setClipStart] = useState<number | null>(null);
 
-  const activeCamera = cameras.find((c) => c.id === selectedCameraId) || cameras[0];
+  const activeCamera = cameras.find((c) => c.id === selectedCameraId) || cameras[0]!;
   const timelineRef = useRef<HTMLDivElement>(null);
 
   // Playback timer ticker

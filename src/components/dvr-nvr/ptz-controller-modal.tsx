@@ -182,7 +182,7 @@ export function PtzControllerModal({ camera, open, onOpenChange }: PtzController
                 min={1}
                 max={8}
                 step={1}
-                onValueChange={(val) => setSpeed(val[0])}
+                onValueChange={(val) => setSpeed(val[0] ?? 1)}
               />
             </div>
           </div>

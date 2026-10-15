@@ -450,14 +450,13 @@ function DvrNvrPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-2">
                 <LiveCameraView
-                  camera={cameras.find((c) => c.id === focusedCameraId) || cameras[0]}
-                  isSubStream={streamQuality === "sub"}
+                  camera={cameras.find((c) => c.id === focusedCameraId) || cameras[0]!}
                   onOpenPtz={(cam) => setPtzCamera(cam)}
                 />
               </div>
               <div className="space-y-3 max-h-[700px] overflow-y-auto pr-1">
                 {cameras
-                  .filter((c) => c.id !== (focusedCameraId || cameras[0].id))
+                  .filter((c) => c.id !== (focusedCameraId || cameras[0]?.id))
                   .slice(0, 5)
                   .map((cam) => (
                     <div
@@ -468,7 +467,6 @@ function DvrNvrPage() {
                     >
                       <LiveCameraView
                         camera={cam}
-                        isSubStream={true}
                         onOpenPtz={(c) => setPtzCamera(c)}
                       />
                     </div>
@@ -490,7 +488,6 @@ function DvrNvrPage() {
                 <div key={camera.id} className="relative">
                   <LiveCameraView
                     camera={camera}
-                    isSubStream={streamQuality === "sub"}
                     onOpenPtz={(cam) => setPtzCamera(cam)}
                   />
                   {gridMode !== "1x1" && (
@@ -534,7 +531,7 @@ function DvrNvrPage() {
 
         {/* TAB 2: Playback & 24h Timeline */}
         <TabsContent value="playback" className="m-0">
-          <TimelinePlayback cameras={cameras} />
+          <TimelinePlayback cameras={cameras} selectedCameraId={focusedCameraId ?? cameras[0]?.id ?? ""} onSelectCamera={setFocusedCameraId} />
         </TabsContent>
 
         {/* TAB 3: AI Analytics & Smart Detection */}
@@ -723,10 +720,11 @@ function DvrNvrPage() {
 
       {/* Dialogs and Modals */}
       <CameraManagerDialog
+        cameras={cameras}
         open={isCameraManagerOpen}
         onOpenChange={setIsCameraManagerOpen}
-        onSaveCamera={handleSaveCamera}
-        existingCamera={cameraToEdit}
+        onAddCamera={(cam) => setCameras((prev) => [...prev, cam])}
+        onDeleteCamera={(id) => setCameras((prev) => prev.filter((c) => c.id !== id))}
       />
 
       {ptzCamera && (
