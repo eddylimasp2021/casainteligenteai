@@ -1,0 +1,22 @@
+# =====================================================================
+# CASA INTELIGENTE I.A. — MQTT Access Control Lists (ACL)
+# =====================================================================
+
+# 1. Usuário Gateway Central (Controle total nos tópicos CI v1 e Zigbee)
+user casa-gateway-user
+topic readwrite ci/v1/#
+topic readwrite zigbee2mqtt/#
+
+# 2. Usuário Dispositivos ESP32 (Permissão restrita aos seus próprios tópicos)
+# Exemplo para dispositivo ci-esp32-relay-01 na casa-001:
+user esp32_client
+topic read ci/v1/+/+/command
+topic write ci/v1/+/+/state
+topic write ci/v1/+/+/availability
+topic write ci/v1/+/+/result
+topic write ci/v1/+/+/telemetry
+
+# 3. Usuário Zigbee2MQTT
+user zigbee2mqtt_user
+topic readwrite zigbee2mqtt/#
+topic write ci/v1/+/+/state

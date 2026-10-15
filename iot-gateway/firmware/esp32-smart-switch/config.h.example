@@ -1,0 +1,32 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
+// =====================================================================
+// CASA INTELIGENTE I.A. — Firmware ESP32 Smart Switch Configuração
+// Renomeie este arquivo para config.h e preencha com seus dados locais.
+// NUNCA versione senhas ou certificados reais no Git.
+// =====================================================================
+
+// Rede Wi-Fi
+#define WIFI_SSID       "SUA_REDE_WIFI"
+#define WIFI_PASSWORD   "SUA_SENHA_WIFI"
+
+// Identificação do Dispositivo e Residência
+#define HOUSEHOLD_ID    "casa-001"
+#define DEVICE_ID       "ci-esp32-relay-01"
+
+// Broker MQTT
+#define MQTT_HOST       "192.168.1.100" // IP local ou hostname do broker Mosquitto
+#define MQTT_PORT       1883            // 1883 para TCP local, 8883 para TLS MQTTS
+#define MQTT_USER       "esp32_client"
+#define MQTT_PASS       "sua_senha_secreta_mqtt"
+
+// Pino de Saída (Relé ou LED integrado)
+// Na maioria das placas ESP32 (NodeMCU / DevKit v1), o LED interno fica no GPIO 2.
+#define RELAY_PIN       2
+#define RELAY_ACTIVE_HIGH true // true: HIGH liga / false: LOW liga (módulos relé optoacoplados)
+
+// Intervalo de Telemetria (milissegundos)
+#define TELEMETRY_INTERVAL_MS 60000
+
+#endif // CONFIG_H

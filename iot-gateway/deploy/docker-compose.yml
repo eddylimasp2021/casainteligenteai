@@ -1,0 +1,82 @@
+version: "3.8"
+
+services:
+  # -------------------------------------------------------------------
+  # 1. Broker MQTT (Eclipse Mosquitto com Autenticação e ACLs)
+  # -------------------------------------------------------------------
+  mosquitto:
+    image: eclipse-mosquitto:2.0.20
+    container_name: ci-mosquitto
+    restart: unless-stopped
+    ports:
+      # Expor porta 1883 apenas na rede local; NÃO expor abertamente na internet
+      - "1883:1883"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto.acl:/mosquitto/config/mosquitto.acl:ro
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-log:/mosquitto/log
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-u", "${MQTT_USERNAME:-casa-gateway-user}", "-P", "${MQTT_PASSWORD:-secret}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ci-iot-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # -------------------------------------------------------------------
+  # 2. Casa Inteligente IoT Gateway (Node.js LTS + TypeScript + Fastify)
+  # -------------------------------------------------------------------
+  gateway:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: ci-iot-gateway
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+      - HOST=0.0.0.0
+      - GATEWAY_ID=${GATEWAY_ID:-gw-local-001}
+      - GATEWAY_NAME=${GATEWAY_NAME:-Gateway Principal}
+      - GATEWAY_API_TOKEN=${GATEWAY_API_TOKEN:-substitua-por-um-token-seguro}
+      - MQTT_URL=mqtt://mosquitto:1883
+      - MQTT_USERNAME=${MQTT_USERNAME:-casa-gateway-user}
+      - MQTT_PASSWORD=${MQTT_PASSWORD:-secret}
+      - MQTT_CLIENT_ID=ci-gateway-core
+      - HOME_ASSISTANT_URL=${HOME_ASSISTANT_URL:-}
+      - HOME_ASSISTANT_TOKEN=${HOME_ASSISTANT_TOKEN:-}
+      - ZIGBEE2MQTT_BASE_TOPIC=${ZIGBEE2MQTT_BASE_TOPIC:-zigbee2mqtt}
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      mosquitto:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - ci-iot-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+volumes:
+  mosquitto-data:
+  mosquitto-log:
+
+networks:
+  ci-iot-net:
+    driver: bridge

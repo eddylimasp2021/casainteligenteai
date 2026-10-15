@@ -16,7 +16,9 @@ import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppDevicesRouteImport } from './routes/_app/devices'
+import { Route as AppGatewaysRouteImport } from './routes/_app/gateways'
 import { Route as AppHistoryRouteImport } from './routes/_app/history'
+import { Route as AppIntegrationsRouteImport } from './routes/_app/integrations'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppRoomsIndexRouteImport } from './routes/_app/rooms.index'
 import { Route as AppRoomsIdRouteImport } from './routes/_app/rooms.$id'
@@ -55,9 +57,19 @@ const AppDevicesRoute = AppDevicesRouteImport.update({
   path: '/devices',
   getParentRoute: () => AppRoute,
 } as any)
+const AppGatewaysRoute = AppGatewaysRouteImport.update({
+  id: '/gateways',
+  path: '/gateways',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppHistoryRoute = AppHistoryRouteImport.update({
   id: '/history',
   path: '/history',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppIntegrationsRoute = AppIntegrationsRouteImport.update({
+  id: '/integrations',
+  path: '/integrations',
   getParentRoute: () => AppRoute,
 } as any)
 const AppSettingsRoute = AppSettingsRouteImport.update({
@@ -83,7 +95,9 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/dashboard': typeof AppDashboardRoute
   '/devices': typeof AppDevicesRoute
+  '/gateways': typeof AppGatewaysRoute
   '/history': typeof AppHistoryRoute
+  '/integrations': typeof AppIntegrationsRoute
   '/settings': typeof AppSettingsRoute
   '/rooms/$id': typeof AppRoomsIdRoute
   '/rooms/': typeof AppRoomsIndexRoute
@@ -95,7 +109,9 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/dashboard': typeof AppDashboardRoute
   '/devices': typeof AppDevicesRoute
+  '/gateways': typeof AppGatewaysRoute
   '/history': typeof AppHistoryRoute
+  '/integrations': typeof AppIntegrationsRoute
   '/settings': typeof AppSettingsRoute
   '/rooms/$id': typeof AppRoomsIdRoute
   '/rooms': typeof AppRoomsIndexRoute
@@ -109,7 +125,9 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/devices': typeof AppDevicesRoute
+  '/_app/gateways': typeof AppGatewaysRoute
   '/_app/history': typeof AppHistoryRoute
+  '/_app/integrations': typeof AppIntegrationsRoute
   '/_app/settings': typeof AppSettingsRoute
   '/_app/rooms/$id': typeof AppRoomsIdRoute
   '/_app/rooms/': typeof AppRoomsIndexRoute
@@ -123,7 +141,9 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/dashboard'
     | '/devices'
+    | '/gateways'
     | '/history'
+    | '/integrations'
     | '/settings'
     | '/rooms/$id'
     | '/rooms/'
@@ -135,7 +155,9 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/dashboard'
     | '/devices'
+    | '/gateways'
     | '/history'
+    | '/integrations'
     | '/settings'
     | '/rooms/$id'
     | '/rooms'
@@ -148,7 +170,9 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/_app/dashboard'
     | '/_app/devices'
+    | '/_app/gateways'
     | '/_app/history'
+    | '/_app/integrations'
     | '/_app/settings'
     | '/_app/rooms/$id'
     | '/_app/rooms/'
@@ -213,11 +237,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDevicesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/gateways': {
+      id: '/_app/gateways'
+      path: '/gateways'
+      fullPath: '/gateways'
+      preLoaderRoute: typeof AppGatewaysRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/history': {
       id: '/_app/history'
       path: '/history'
       fullPath: '/history'
       preLoaderRoute: typeof AppHistoryRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/integrations': {
+      id: '/_app/integrations'
+      path: '/integrations'
+      fullPath: '/integrations'
+      preLoaderRoute: typeof AppIntegrationsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/settings': {
@@ -247,7 +285,9 @@ declare module '@tanstack/react-router' {
 interface AppRouteChildren {
   AppDashboardRoute: typeof AppDashboardRoute
   AppDevicesRoute: typeof AppDevicesRoute
+  AppGatewaysRoute: typeof AppGatewaysRoute
   AppHistoryRoute: typeof AppHistoryRoute
+  AppIntegrationsRoute: typeof AppIntegrationsRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppRoomsIdRoute: typeof AppRoomsIdRoute
   AppRoomsIndexRoute: typeof AppRoomsIndexRoute
@@ -256,7 +296,9 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppDashboardRoute: AppDashboardRoute,
   AppDevicesRoute: AppDevicesRoute,
+  AppGatewaysRoute: AppGatewaysRoute,
   AppHistoryRoute: AppHistoryRoute,
+  AppIntegrationsRoute: AppIntegrationsRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppRoomsIdRoute: AppRoomsIdRoute,
   AppRoomsIndexRoute: AppRoomsIndexRoute,
