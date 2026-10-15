@@ -27,9 +27,13 @@ const EnvSchema = z.object({
   MATTER_CONTROLLER_URL: z.string().url().optional(),
   MATTER_ENABLED: z.coerce.boolean().default(false),
 
-  // Supabase Backend
+  // Supabase Backend (pode usar Anon/Publishable Key + Auth de Usuário sem expor service_role)
   SUPABASE_URL: z.string().url().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  SUPABASE_ANON_KEY: z.string().optional(),
+  HOUSEHOLD_ID: z.string().uuid().optional(),
+  GATEWAY_AUTH_EMAIL: z.string().email().optional(),
+  GATEWAY_AUTH_PASSWORD: z.string().optional(),
 
   // Observability & Security
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
@@ -71,7 +75,9 @@ export function sanitizeConfig(cfg: GatewayConfig): Record<string, unknown> {
     HOME_ASSISTANT_CONFIGURED: Boolean(cfg.HOME_ASSISTANT_URL && cfg.HOME_ASSISTANT_TOKEN),
     ZIGBEE2MQTT_BASE_TOPIC: cfg.ZIGBEE2MQTT_BASE_TOPIC,
     MATTER_ENABLED: cfg.MATTER_ENABLED,
-    SUPABASE_CONFIGURED: Boolean(cfg.SUPABASE_URL && cfg.SUPABASE_SERVICE_ROLE_KEY),
+    SUPABASE_CONFIGURED: Boolean(cfg.SUPABASE_URL && (cfg.SUPABASE_SERVICE_ROLE_KEY || cfg.SUPABASE_ANON_KEY)),
+    SUPABASE_AUTH_MODE: cfg.SUPABASE_SERVICE_ROLE_KEY ? "service_role" : cfg.GATEWAY_AUTH_EMAIL ? "service_account" : "anon",
+    HOUSEHOLD_BOUND: Boolean(cfg.HOUSEHOLD_ID),
     LOG_LEVEL: cfg.LOG_LEVEL,
     COMMAND_TIMEOUT_MS: cfg.COMMAND_TIMEOUT_MS,
   };
