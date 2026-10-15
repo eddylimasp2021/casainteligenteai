@@ -448,7 +448,8 @@ export function RealCameraPlayer({
   }, [disconnectStream, handleConnect]);
 
   const copyDockerCommand = () => {
-    const cmd = "docker compose -f iot-gateway/deploy/docker-compose.yml up -d go2rtc";
+    const cmd =
+      'docker compose -f "d:\\Sistema ja  ok\\casainteligenteai\\iot-gateway\\deploy\\docker-compose.yml" up -d go2rtc';
     navigator.clipboard.writeText(cmd);
     setCopiedCommand(true);
     toast.success("Comando copiado para a área de transferência!");
@@ -894,7 +895,7 @@ export function RealCameraPlayer({
                 </Button>
               </div>
               <pre className="p-2 rounded bg-black/60 text-emerald-400 text-[11px] overflow-x-auto">
-                docker compose -f iot-gateway/deploy/docker-compose.yml up -d go2rtc
+                docker compose -f "d:\Sistema ja  ok\casainteligenteai\iot-gateway\deploy\docker-compose.yml" up -d go2rtc
               </pre>
             </div>
           </div>
