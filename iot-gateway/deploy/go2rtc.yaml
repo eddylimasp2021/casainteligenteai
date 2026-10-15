@@ -27,10 +27,13 @@ webrtc:
 # Os fluxos podem ser definidos estaticamente aqui ou dinamicamente via API REST:
 # PUT http://localhost:1984/api/streams?name=garagem_rua&src=rtsp://admin:senha@192.168.0.139:554/onvif1
 streams:
-  # Câmera Garagem Rua (Exemplo real fornecido pelo usuário)
+  # Câmera Garagem Rua (Stream Original RTSP H.265 da Câmera)
   garagem_rua:
-    - "rtsp://admin:ambar786@192.168.0.139:554/onvif1#backchannel=0"
-    - "ffmpeg:garagem_rua#audio=opus"
+    - rtsp://admin:ambar786@192.168.0.139:554/onvif1#backchannel=0
+
+  # Câmera Garagem Rua H.264 (Transcodificado para WebRTC em navegadores Chrome/Edge)
+  garagem_rua_h264:
+    - ffmpeg:rtsp://127.0.0.1:8554/garagem_rua#video=h264
 
 # 5. Configuração de Logs com Rotação
 log:
