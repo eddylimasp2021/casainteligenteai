@@ -199,7 +199,7 @@ export function AiAnalyticsPanel({ events, cameras, onAcknowledgeEvent }: AiAnal
                 min={50}
                 max={99}
                 step={1}
-                onValueChange={(val) => setSensitivity(val[0])}
+                onValueChange={(val) => setSensitivity(val[0] ?? 0)}
               />
             </div>
 

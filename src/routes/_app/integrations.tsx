@@ -95,11 +95,11 @@ function IntegrationsPage() {
     queryKey: ["iot-integrations", current?.id],
     enabled: !!current,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from("iot_integrations")
         .select("*")
         .eq("household_id", current!.id);
-      return data ?? [];
+      return (data ?? []) as any[];
     },
   });
 
