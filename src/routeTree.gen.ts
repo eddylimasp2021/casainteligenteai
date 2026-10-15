@@ -16,6 +16,7 @@ import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppDevicesRouteImport } from './routes/_app/devices'
+import { Route as AppDvrNvrRouteImport } from './routes/_app/dvr-nvr'
 import { Route as AppGatewaysRouteImport } from './routes/_app/gateways'
 import { Route as AppHistoryRouteImport } from './routes/_app/history'
 import { Route as AppIntegrationsRouteImport } from './routes/_app/integrations'
@@ -57,6 +58,11 @@ const AppDevicesRoute = AppDevicesRouteImport.update({
   path: '/devices',
   getParentRoute: () => AppRoute,
 } as any)
+const AppDvrNvrRoute = AppDvrNvrRouteImport.update({
+  id: '/dvr-nvr',
+  path: '/dvr-nvr',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppGatewaysRoute = AppGatewaysRouteImport.update({
   id: '/gateways',
   path: '/gateways',
@@ -95,6 +101,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/dashboard': typeof AppDashboardRoute
   '/devices': typeof AppDevicesRoute
+  '/dvr-nvr': typeof AppDvrNvrRoute
   '/gateways': typeof AppGatewaysRoute
   '/history': typeof AppHistoryRoute
   '/integrations': typeof AppIntegrationsRoute
@@ -109,6 +116,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/dashboard': typeof AppDashboardRoute
   '/devices': typeof AppDevicesRoute
+  '/dvr-nvr': typeof AppDvrNvrRoute
   '/gateways': typeof AppGatewaysRoute
   '/history': typeof AppHistoryRoute
   '/integrations': typeof AppIntegrationsRoute
@@ -125,6 +133,7 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/devices': typeof AppDevicesRoute
+  '/_app/dvr-nvr': typeof AppDvrNvrRoute
   '/_app/gateways': typeof AppGatewaysRoute
   '/_app/history': typeof AppHistoryRoute
   '/_app/integrations': typeof AppIntegrationsRoute
@@ -141,6 +150,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/dashboard'
     | '/devices'
+    | '/dvr-nvr'
     | '/gateways'
     | '/history'
     | '/integrations'
@@ -155,6 +165,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/dashboard'
     | '/devices'
+    | '/dvr-nvr'
     | '/gateways'
     | '/history'
     | '/integrations'
@@ -170,6 +181,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/_app/dashboard'
     | '/_app/devices'
+    | '/_app/dvr-nvr'
     | '/_app/gateways'
     | '/_app/history'
     | '/_app/integrations'
@@ -237,6 +249,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDevicesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/dvr-nvr': {
+      id: '/_app/dvr-nvr'
+      path: '/dvr-nvr'
+      fullPath: '/dvr-nvr'
+      preLoaderRoute: typeof AppDvrNvrRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/gateways': {
       id: '/_app/gateways'
       path: '/gateways'
@@ -285,6 +304,7 @@ declare module '@tanstack/react-router' {
 interface AppRouteChildren {
   AppDashboardRoute: typeof AppDashboardRoute
   AppDevicesRoute: typeof AppDevicesRoute
+  AppDvrNvrRoute: typeof AppDvrNvrRoute
   AppGatewaysRoute: typeof AppGatewaysRoute
   AppHistoryRoute: typeof AppHistoryRoute
   AppIntegrationsRoute: typeof AppIntegrationsRoute
@@ -296,6 +316,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppDashboardRoute: AppDashboardRoute,
   AppDevicesRoute: AppDevicesRoute,
+  AppDvrNvrRoute: AppDvrNvrRoute,
   AppGatewaysRoute: AppGatewaysRoute,
   AppHistoryRoute: AppHistoryRoute,
   AppIntegrationsRoute: AppIntegrationsRoute,
