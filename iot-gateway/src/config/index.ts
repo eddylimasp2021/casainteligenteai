@@ -35,6 +35,11 @@ const EnvSchema = z.object({
   GATEWAY_AUTH_EMAIL: z.string().email().optional(),
   GATEWAY_AUTH_PASSWORD: z.string().optional(),
 
+  // Embedded MQTT Broker (permite executar broker sem Docker no Windows)
+  EMBEDDED_MQTT_BROKER: z.coerce.boolean().default(false),
+  MQTT_BROKER_PORT: z.coerce.number().int().min(1024).max(65535).default(1883),
+  MQTT_BROKER_HOST: z.string().default("0.0.0.0"),
+
   // Observability & Security
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
   COMMAND_TIMEOUT_MS: z.coerce.number().min(1000).default(30000),
@@ -72,6 +77,8 @@ export function sanitizeConfig(cfg: GatewayConfig): Record<string, unknown> {
     MQTT_URL: cfg.MQTT_URL,
     MQTT_CLIENT_ID: cfg.MQTT_CLIENT_ID,
     MQTT_HAS_AUTH: Boolean(cfg.MQTT_USERNAME && cfg.MQTT_PASSWORD),
+    EMBEDDED_MQTT_BROKER: cfg.EMBEDDED_MQTT_BROKER,
+    MQTT_BROKER_PORT: cfg.MQTT_BROKER_PORT,
     HOME_ASSISTANT_CONFIGURED: Boolean(cfg.HOME_ASSISTANT_URL && cfg.HOME_ASSISTANT_TOKEN),
     ZIGBEE2MQTT_BASE_TOPIC: cfg.ZIGBEE2MQTT_BASE_TOPIC,
     MATTER_ENABLED: cfg.MATTER_ENABLED,

@@ -15,10 +15,12 @@ import { MatterAdapter } from "./adapters/matter/matter-adapter.js";
 import { DeviceRegistry } from "./devices/device-registry.js";
 import { registerRoutes } from "./api/routes.js";
 import type { IAdapter } from "./adapters/base-adapter.js";
+import { CasaMqttBroker } from "./broker/mqtt-broker.js";
 
 export interface GatewayApplication {
   app: FastifyInstance;
   mqttTransport: MqttTransport;
+  mqttBroker?: CasaMqttBroker | null;
   commandManager: CommandManager;
   deviceRegistry: DeviceRegistry;
   eventBus: GatewayEventBus;
@@ -41,6 +43,19 @@ export async function buildApp(config: GatewayConfig): Promise<GatewayApplicatio
   const matterAdapter = new MatterAdapter(config, logger);
 
   const adapters: IAdapter[] = [esp32Adapter, haAdapter, z2mAdapter, matterAdapter];
+
+  // Optional embedded MQTT broker
+  let mqttBroker: CasaMqttBroker | null = null;
+  if (config.EMBEDDED_MQTT_BROKER) {
+    mqttBroker = new CasaMqttBroker(
+      {
+        port: config.MQTT_BROKER_PORT,
+        host: config.MQTT_BROKER_HOST,
+        allowAnonymous: false,
+      },
+      logger
+    );
+  }
 
   const app: FastifyInstance = fastify({
     logger: false,
@@ -97,6 +112,18 @@ export async function buildApp(config: GatewayConfig): Promise<GatewayApplicatio
 
   const start = async () => {
     logger.info("Initializing IoT Gateway services...");
+
+    // Start embedded MQTT broker if configured
+    if (mqttBroker) {
+      logger.info({ port: config.MQTT_BROKER_PORT }, "Starting embedded Casa MQTT Broker...");
+      try {
+        await mqttBroker.start();
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.warn({ err: msg }, "Embedded MQTT broker start issue (external broker may be running); proceeding");
+      }
+    }
+
     await deviceRegistry.initialize();
 
     // Connect to MQTT
@@ -121,12 +148,16 @@ export async function buildApp(config: GatewayConfig): Promise<GatewayApplicatio
     await Promise.allSettled(adapters.map((a) => a.close()));
     await mqttTransport.close();
     await deviceRegistry.close();
+    if (mqttBroker) {
+      await mqttBroker.stop();
+    }
     logger.info("IoT Gateway stopped cleanly");
   };
 
   return {
     app,
     mqttTransport,
+    mqttBroker,
     commandManager,
     deviceRegistry,
     eventBus,
