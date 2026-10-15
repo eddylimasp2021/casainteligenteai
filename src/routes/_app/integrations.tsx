@@ -99,7 +99,7 @@ function IntegrationsPage() {
         .from("iot_integrations")
         .select("*")
         .eq("household_id", current!.id);
-      return data ?? [];
+      return (data ?? []) as any[];
     },
   });
 
