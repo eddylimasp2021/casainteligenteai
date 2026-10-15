@@ -35,6 +35,10 @@ export interface IpCamera {
   };
   presets?: Array<{ id: number; name: string }>;
   currentPtz?: { pan: number; tilt: number; zoom: number };
+  streamUrl?: string; // Direct WebRTC, HLS (.m3u8), MP4 or HTTP/HTTPS proxy stream
+  snapshotUrl?: string; // Direct HTTP snapshot (e.g. /cgi-bin/snapshot.cgi)
+  viewMode?: "auto" | "stream" | "snapshot" | "simulation"; // Display mode preference
+  haEntityId?: string; // Optional Home Assistant camera entity (e.g. camera.portao)
 }
 
 export interface NvrRecording {

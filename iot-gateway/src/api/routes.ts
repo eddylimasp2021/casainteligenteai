@@ -268,4 +268,43 @@ export function registerRoutes(
       };
     }
   );
+
+  // 12. Camera Snapshot Proxy (allows browser to securely fetch snapshots from local IP cameras)
+  app.get<{
+    Querystring: { url: string; username?: string; password?: string };
+  }>("/api/v1/cameras/proxy-snapshot", async (req, reply) => {
+    const { url, username, password } = req.query;
+    if (!url || !url.startsWith("http")) {
+      return reply.status(400).send({ error: "Invalid URL parameter" });
+    }
+
+    try {
+      const headers: Record<string, string> = {};
+      if (username && password) {
+        headers["Authorization"] = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+      const response = await fetch(url, {
+        headers,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        return reply.status(response.status).send({ error: `Camera returned HTTP ${response.status}` });
+      }
+
+      const buffer = await response.arrayBuffer();
+      reply
+        .header("Content-Type", response.headers.get("content-type") || "image/jpeg")
+        .header("Cache-Control", "no-cache, no-store, must-revalidate")
+        .send(Buffer.from(buffer));
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      return reply.status(502).send({ error: "Failed to connect to local camera", details: errMsg });
+    }
+  });
 }

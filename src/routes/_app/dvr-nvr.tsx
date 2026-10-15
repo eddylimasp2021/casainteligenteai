@@ -172,6 +172,9 @@ function DvrNvrPage() {
         hasNightVision: cameraData.hasNightVision ?? true,
         nightVisionActive: false,
         recordingMode: cameraData.recordingMode || "continuous",
+        streamUrl: cameraData.streamUrl,
+        snapshotUrl: cameraData.snapshotUrl,
+        viewMode: cameraData.viewMode || "auto",
         aiFeatures: cameraData.aiFeatures || {
           motionDetection: true,
           humanDetection: true,
