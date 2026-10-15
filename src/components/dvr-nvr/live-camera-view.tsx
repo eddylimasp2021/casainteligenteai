@@ -15,6 +15,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 
 interface LiveCameraViewProps {
@@ -351,14 +359,18 @@ export function LiveCameraView({
           <img
             src={`${camera.snapshotUrl}${camera.snapshotUrl.includes("?") ? "&" : "?"}_t=${snapshotTimestamp}`}
             alt={camera.name}
-            onError={() => setSnapshotError(true)}
+            onError={() => {
+              setSnapshotError(true);
+              setActiveMode("simulation");
+              toast.info(`Câmera ${camera.name}: modo simulação I.A. ativado enquanto a conexão local é estabelecida.`);
+            }}
             onLoad={() => setSnapshotError(false)}
             className="h-full w-full object-cover"
           />
         )}
 
-        {/* MODE 3: Procedural Simulation Canvas */}
-        {activeMode === "simulation" && (
+        {/* MODE 3: Procedural Simulation Canvas (Always ready as fallback) */}
+        {(activeMode === "simulation" || snapshotError || videoError) && (
           <canvas
             ref={canvasRef}
             width={640}
@@ -367,45 +379,34 @@ export function LiveCameraView({
           />
         )}
 
-        {/* Informative Diagnostic Overlay if user has an unconfigured RTSP camera or errors */}
-        {(videoError || snapshotError || showConfigHelper) && (
-          <div className="absolute inset-0 z-10 bg-black/85 backdrop-blur-sm p-4 flex flex-col justify-center items-center text-center text-white space-y-3">
-            <div className="size-10 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center">
-              <AlertTriangle className="size-5" />
+        {/* Non-blocking top info banner when running in simulation due to local RTSP */}
+        {(snapshotError || showConfigHelper) && (
+          <div className="absolute top-8 inset-x-2 z-10 p-2 rounded-lg bg-black/75 backdrop-blur-md border border-amber-500/40 text-white flex items-center justify-between text-[11px] gap-2">
+            <div className="flex items-center gap-1.5 truncate">
+              <AlertTriangle className="size-3.5 text-amber-400 shrink-0" />
+              <span className="truncate">
+                RTSP Local detectado (<code>rtsp://{camera.ip}:{camera.port}{camera.rtspPath}</code>).
+              </span>
             </div>
-            <div className="max-w-md space-y-1">
-              <h4 className="font-bold text-sm">Transmissão da Câmera IP</h4>
-              <p className="text-xs text-neutral-300">
-                {videoError ||
-                  snapshotError ||
-                  "Câmeras IP transmitem em RTSP nativo. Navegadores exigem conversão para WebRTC/HLS ou uso de Snapshot HTTP."}
-              </p>
-              <p className="font-mono text-[11px] text-amber-300/90 pt-1">
-                RTSP: rtsp://{camera.ip}:{camera.port}{camera.rtspPath}
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+            <div className="flex items-center gap-1.5 shrink-0">
               <Button
                 size="sm"
                 variant="outline"
-                onClick={handleActivateSnapshot}
-                className="h-7 text-xs bg-white/10 hover:bg-white/20 text-white border-white/20"
+                onClick={() => setShowConfigHelper(true)}
+                className="h-6 px-2 text-[10px] bg-white/10 hover:bg-white/20 text-white border-white/20"
               >
-                Ativar Snapshot HTTP
+                Guia de Conexão Real
               </Button>
               <Button
                 size="sm"
-                variant="outline"
+                variant="ghost"
                 onClick={() => {
-                  setVideoError(null);
                   setSnapshotError(false);
-                  setActiveMode("simulation");
                   setShowConfigHelper(false);
                 }}
-                className="h-7 text-xs bg-primary/20 hover:bg-primary/30 text-primary border-primary/30"
+                className="h-6 px-1.5 text-[10px] text-neutral-400 hover:text-white"
               >
-                Ver Simulação com I.A.
+                Fechar
               </Button>
             </div>
           </div>
@@ -688,6 +689,62 @@ export function LiveCameraView({
           </div>
         </div>
       </div>
+
+      {/* Real Connection Helper Dialog */}
+      <Dialog open={showConfigHelper} onOpenChange={setShowConfigHelper}>
+        <DialogContent className="max-w-lg text-xs">
+          <DialogHeader>
+            <DialogTitle className="text-base flex items-center gap-2">
+              <Camera className="size-5 text-primary" />
+              Como Visualizar a Imagem Real da Câmera IP
+            </DialogTitle>
+            <DialogDescription>
+              Orientações para transmitir câmeras locais (ex: {camera.ip}) em navegadores web
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 space-y-1">
+              <span className="font-semibold text-amber-400">Por que o navegador bloqueia conexões locais?</span>
+              <p className="text-muted-foreground leading-relaxed">
+                Este site roda em conexão segura HTTPS (<code>lovable.app</code>). Por padrão, os navegadores Chrome e Edge bloqueiam requisições a dispositivos locais sem SSL (Mixed Content) e não têm suporte nativo ao protocolo RTSP (porta 554).
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="font-semibold text-foreground">Como liberar a imagem real:</h4>
+
+              <div className="p-2.5 rounded-lg border bg-muted/20 space-y-1">
+                <span className="font-bold text-foreground">1. Liberar Conteúdo Local no Chrome / Edge (1 minuto)</span>
+                <p className="text-muted-foreground">
+                  • Clique no ícone de configurações ao lado da barra de endereços (à esquerda do cadeado de <code>casainteligenteai.lovable.app</code>).<br />
+                  • Selecione <strong>Configurações do site</strong>.<br />
+                  • Na opção <strong>Conteúdo não seguro</strong> (Insecure content), altere de "Bloquear" para <strong>"Permitir"</strong>.<br />
+                  • Recarregue a página (F5) para que o navegador busque a imagem da sua câmera na rede!
+                </p>
+              </div>
+
+              <div className="p-2.5 rounded-lg border bg-muted/20 space-y-1">
+                <span className="font-bold text-foreground">2. Usar o IoT Gateway Local no Windows (Ponte WebRTC)</span>
+                <p className="text-muted-foreground">
+                  O nosso <code>iot-gateway</code> rodando no seu computador converte o RTSP da câmera <code>{camera.ip}</code> em stream WebRTC de 30 FPS com áudio bidirecional e latência zero.
+                </p>
+              </div>
+
+              <div className="p-2.5 rounded-lg border bg-muted/20 space-y-1">
+                <span className="font-bold text-foreground">3. Modo Simulação com I.A. (Ativo no momento)</span>
+                <p className="text-muted-foreground">
+                  A simulação de segurança com inteligência artificial está ativa, permitindo testar controles PTZ, detecção de movimento, linha do tempo 24h e gravação.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button onClick={() => setShowConfigHelper(false)}>Entendi</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
