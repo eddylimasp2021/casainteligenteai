@@ -1,0 +1,38 @@
+# ==============================================================================
+# Casa Inteligente I.A. — HomePulse AI
+# Configuração Profissional do go2rtc (Gateway de Mídia para Câmeras IP / CFTV)
+# ==============================================================================
+
+# 1. API Web, WebSocket e REST
+api:
+  listen: ":1984"
+  # Habilita CORS irrestrito para permitir conexões do Lovable (https://casainteligenteai.lovable.app)
+  origin: "*"
+  base_path: ""
+
+# 2. Servidor RTSP local para retransmissão
+rtsp:
+  listen: ":8554"
+
+# 3. Servidor WebRTC para streaming de baixíssima latência (sub-100ms)
+webrtc:
+  listen: ":8555"
+  # Candidatos ICE locais (STUN do Google para travessia NAT se necessário)
+  ice_servers:
+    - urls:
+        - "stun:stun.l.google.com:19302"
+        - "stun:stun1.l.google.com:19302"
+
+# 4. Configuração de Streams (Câmeras IP Registradas)
+# Os fluxos podem ser definidos estaticamente aqui ou dinamicamente via API REST:
+# PUT http://localhost:1984/api/streams?name=garagem_rua&src=rtsp://admin:senha@192.168.0.139:554/onvif1
+streams:
+  # Câmera Garagem Rua (Exemplo real fornecido pelo usuário)
+  garagem_rua:
+    - "rtsp://admin:ambar786@192.168.0.139:554/onvif1#backchannel=0"
+    - "ffmpeg:garagem_rua#audio=opus"
+
+# 5. Configuração de Logs com Rotação
+log:
+  level: "info"
+  format: "text"

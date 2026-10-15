@@ -231,6 +231,14 @@ export function CameraManagerDialog({
         if (parsed.password) setPassword(parsed.password);
         setRtspPath(parsed.path);
         setSnapshotUrl(`http://${parsed.ip}/snapshot.jpg`);
+        if (!name || name.trim() === "") {
+          if (parsed.ip === "192.168.0.139") {
+            setName("Câmera Garagem / Rua");
+            setRoomName("Garagem / Rua");
+          } else {
+            setName(`Câmera IP (${parsed.ip})`);
+          }
+        }
         toast.success("URL RTSP identificada!", {
           description: `IP: ${parsed.ip} • Porta: ${parsed.port} • Senha ocultada com segurança.`,
         });
@@ -337,8 +345,14 @@ export function CameraManagerDialog({
         finalPath = "/" + finalPath;
       }
 
+      // Derive streamName for media gateway
+      const derivedStreamName =
+        name.toLowerCase().includes("garagem") || finalIp === "192.168.0.139"
+          ? "garagem_rua"
+          : `cam_${finalIp.replace(/\./g, "_")}`;
+
       const cameraData: Partial<IpCamera> = {
-        name: name.trim(),
+        name: name.trim() || `Câmera (${finalIp})`,
         roomName: roomName.trim() || "Entrada",
         manufacturer,
         model: model.trim() || `${manufacturer} IP Camera`,
@@ -350,6 +364,9 @@ export function CameraManagerDialog({
         subStreamPath: subStreamPath.trim() || undefined,
         username: finalUser,
         password: finalPass,
+        streamName: derivedStreamName,
+        gatewayHost: "localhost:1984",
+        activeProtocol: "WebRTC",
         streamUrl: streamUrl.trim() || undefined,
         snapshotUrl: snapshotUrl.trim() || undefined,
         viewMode,
@@ -370,6 +387,14 @@ export function CameraManagerDialog({
           facialRecognition: false,
         },
       };
+
+      // Try registering stream dynamically into go2rtc if credentials provided
+      if (finalPass && finalIp) {
+        const fullRtspSource = `rtsp://${finalUser}:${finalPass}@${finalIp}:${finalPort}${finalPath}`;
+        fetch(`http://localhost:1984/api/streams?name=${encodeURIComponent(derivedStreamName)}&src=${encodeURIComponent(fullRtspSource)}`, {
+          method: "PUT",
+        }).catch(() => {});
+      }
 
       if (onSaveCamera) {
         onSaveCamera(cameraData);

@@ -34,6 +34,7 @@ import {
   INITIAL_AI_EVENTS,
 } from "@/types/dvr-nvr";
 import { LiveCameraView } from "@/components/dvr-nvr/live-camera-view";
+import { RealCameraPlayer } from "@/components/dvr-nvr/real-camera-player";
 import { PtzControllerModal } from "@/components/dvr-nvr/ptz-controller-modal";
 import { TimelinePlayback } from "@/components/dvr-nvr/timeline-playback";
 import { AiAnalyticsPanel } from "@/components/dvr-nvr/ai-analytics-panel";
@@ -66,7 +67,29 @@ function DvrNvrPage() {
   const [cameras, setCameras] = useState<IpCamera[]>(() => {
     try {
       const saved = localStorage.getItem(CAMERAS_STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved) as IpCamera[];
+        const hasRealCam = parsed.some(
+          (c) => c.ip === "192.168.0.139" || c.streamName === "garagem_rua"
+        );
+        if (!hasRealCam && INITIAL_CAMERAS.length > 0) {
+          return [INITIAL_CAMERAS[0], ...parsed];
+        }
+        return parsed.map((c) => {
+          if (
+            (c.ip === "192.168.0.139" || (c.name && c.name.toLowerCase().includes("garagem"))) &&
+            !c.streamName
+          ) {
+            return {
+              ...c,
+              streamName: "garagem_rua",
+              gatewayHost: "localhost:1984",
+              activeProtocol: "WebRTC",
+            };
+          }
+          return c;
+        });
+      }
     } catch (e) {
       console.warn("Failed to parse saved cameras", e);
     }
@@ -98,9 +121,13 @@ function DvrNvrPage() {
   // Active Tab
   const [activeTab, setActiveTab] = useState("live");
 
+  // View Engine: "real" (WebRTC via Docker Media Gateway go2rtc) vs "simulation" (AI Canvas)
+  const [viewEngine, setViewEngine] = useState<"real" | "simulation">("real");
+  const [gatewayUrl, setGatewayUrl] = useState<string>("http://localhost:1984");
+
   // Grid layout
   const [gridMode, setGridMode] = useState<GridMode>("2x2");
-  const [focusedCameraId, setFocusedCameraId] = useState<string>(cameras[0]?.id || "cam-01");
+  const [focusedCameraId, setFocusedCameraId] = useState<string>(cameras[0]?.id || "cam-real-01");
 
   // Stream Quality
   const [streamQuality, setStreamQuality] = useState<"main" | "sub">("main");
@@ -142,30 +169,49 @@ function DvrNvrPage() {
 
   // Camera Handlers
   const handleSaveCamera = (cameraData: Partial<IpCamera>) => {
+    const derivedStream =
+      cameraData.streamName ||
+      (cameraData.ip === "192.168.0.139" || (cameraData.name && cameraData.name.toLowerCase().includes("garagem"))
+        ? "garagem_rua"
+        : `cam_${(cameraData.ip || "stream").replace(/\./g, "_")}`);
+
     if (cameraToEdit) {
       setCameras((prev) =>
-        prev.map((c) => (c.id === cameraToEdit.id ? ({ ...c, ...cameraData } as IpCamera) : c))
+        prev.map((c) =>
+          c.id === cameraToEdit.id
+            ? ({
+                ...c,
+                ...cameraData,
+                streamName: derivedStream,
+                gatewayHost: cameraData.gatewayHost || "localhost:1984",
+                activeProtocol: cameraData.activeProtocol || "WebRTC",
+              } as IpCamera)
+            : c
+        )
       );
-      toast.success(`Câmera "${cameraData.name}" atualizada com sucesso.`);
+      toast.success(`Câmera "${cameraData.name || cameraToEdit.name}" atualizada com sucesso.`);
     } else {
       const newCamera: IpCamera = {
         id: `cam-${Date.now().toString(36)}`,
         name: cameraData.name || "Nova Câmera IP",
         roomName: cameraData.roomName || "Geral",
-        ip: cameraData.ip || "192.168.1.150",
+        ip: cameraData.ip || "192.168.0.139",
         port: cameraData.port || 554,
         onvifPort: cameraData.onvifPort || 80,
         manufacturer: cameraData.manufacturer || "Generic",
         model: cameraData.model || "Câmera IP Full HD",
         protocol: cameraData.protocol || "RTSP",
-        rtspPath: cameraData.rtspPath || "/live/ch0",
-        subStreamPath: cameraData.subStreamPath || "/live/ch1",
+        rtspPath: cameraData.rtspPath || "/onvif1",
+        subStreamPath: cameraData.subStreamPath || "/onvif2",
         username: cameraData.username || "admin",
         password: cameraData.password || "",
+        streamName: derivedStream,
+        gatewayHost: cameraData.gatewayHost || "localhost:1984",
+        activeProtocol: cameraData.activeProtocol || "WebRTC",
         resolution: cameraData.resolution || "1080p (1920x1080)",
         fps: cameraData.fps || 30,
         bitrateKbps: cameraData.bitrateKbps || 4096,
-        codec: cameraData.codec || "H.265",
+        codec: cameraData.codec || "H.264",
         status: "online",
         hasPtz: cameraData.hasPtz ?? false,
         hasTwoWayAudio: cameraData.hasTwoWayAudio ?? true,
@@ -174,7 +220,7 @@ function DvrNvrPage() {
         recordingMode: cameraData.recordingMode || "continuous",
         streamUrl: cameraData.streamUrl,
         snapshotUrl: cameraData.snapshotUrl,
-        viewMode: cameraData.viewMode || "auto",
+        viewMode: cameraData.viewMode || "stream",
         aiFeatures: cameraData.aiFeatures || {
           motionDetection: true,
           humanDetection: true,
@@ -186,11 +232,14 @@ function DvrNvrPage() {
           { id: 1, name: "Posição Central" },
           { id: 2, name: "Entrada" },
         ],
+        ...cameraData,
       };
-      setCameras((prev) => [...prev, newCamera]);
+      setCameras((prev) => [newCamera, ...prev]);
+      setFocusedCameraId(newCamera.id);
       toast.success(`Câmera "${newCamera.name}" adicionada ao NVR com sucesso.`);
     }
     setCameraToEdit(null);
+    setIsCameraManagerOpen(false);
   };
 
   const handleDeleteCamera = (id: string) => {
@@ -370,7 +419,35 @@ function DvrNvrPage() {
 
           {/* Controls specific to live tab */}
           {activeTab === "live" && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Engine Switcher: Real WebRTC via Docker vs Simulação I.A. */}
+              <div className="flex items-center rounded-lg border border-border/60 bg-card/60 p-0.5 text-xs">
+                <Button
+                  variant={viewEngine === "real" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewEngine("real")}
+                  className={`h-7 px-2.5 text-xs font-semibold gap-1.5 ${
+                    viewEngine === "real"
+                      ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  title="Vídeo real direto do Docker go2rtc via WebRTC (<100ms)"
+                >
+                  <Radio className="size-3 text-emerald-300 animate-pulse" />
+                  Vídeo Real (WebRTC)
+                </Button>
+                <Button
+                  variant={viewEngine === "simulation" ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewEngine("simulation")}
+                  className="h-7 px-2.5 text-xs font-medium text-muted-foreground gap-1.5"
+                  title="Simulação gráfica com IA (demonstrativo)"
+                >
+                  <Sparkles className="size-3 text-purple-400" />
+                  Simulação I.A.
+                </Button>
+              </div>
+
               <div className="flex items-center rounded-lg border border-border/60 bg-card/60 p-0.5">
                 <Button
                   variant={gridMode === "1x1" ? "secondary" : "ghost"}
@@ -452,10 +529,19 @@ function DvrNvrPage() {
             /* 1+5 Layout (1 large on left, up to 5 smaller stacked on right) */
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-2">
-                <LiveCameraView
-                  camera={cameras.find((c) => c.id === focusedCameraId) || cameras[0]!}
-                  onOpenPtz={(cam) => setPtzCamera(cam)}
-                />
+                {viewEngine === "real" ? (
+                  <RealCameraPlayer
+                    camera={cameras.find((c) => c.id === focusedCameraId) || cameras[0]!}
+                    gatewayUrl={gatewayUrl}
+                    onOpenPtz={(cam) => setPtzCamera(cam)}
+                    isFocused={true}
+                  />
+                ) : (
+                  <LiveCameraView
+                    camera={cameras.find((c) => c.id === focusedCameraId) || cameras[0]!}
+                    onOpenPtz={(cam) => setPtzCamera(cam)}
+                  />
+                )}
               </div>
               <div className="space-y-3 max-h-[700px] overflow-y-auto pr-1">
                 {cameras
@@ -468,10 +554,18 @@ function DvrNvrPage() {
                       className="cursor-pointer transition-transform hover:scale-[1.01] rounded-lg overflow-hidden border border-border/60 hover:border-primary/60"
                       title="Clique para destacar como câmera principal"
                     >
-                      <LiveCameraView
-                        camera={cam}
-                        onOpenPtz={(c) => setPtzCamera(c)}
-                      />
+                      {viewEngine === "real" ? (
+                        <RealCameraPlayer
+                          camera={cam}
+                          gatewayUrl={gatewayUrl}
+                          onOpenPtz={(c) => setPtzCamera(c)}
+                        />
+                      ) : (
+                        <LiveCameraView
+                          camera={cam}
+                          onOpenPtz={(c) => setPtzCamera(c)}
+                        />
+                      )}
                     </div>
                   ))}
               </div>
@@ -489,10 +583,22 @@ function DvrNvrPage() {
             >
               {displayedCameras.map((camera) => (
                 <div key={camera.id} className="relative">
-                  <LiveCameraView
-                    camera={camera}
-                    onOpenPtz={(cam) => setPtzCamera(cam)}
-                  />
+                  {viewEngine === "real" ? (
+                    <RealCameraPlayer
+                      camera={camera}
+                      gatewayUrl={gatewayUrl}
+                      onOpenPtz={(cam) => setPtzCamera(cam)}
+                      isFocused={focusedCameraId === camera.id}
+                      onSelect={() => setFocusedCameraId(camera.id)}
+                    />
+                  ) : (
+                    <LiveCameraView
+                      camera={camera}
+                      onOpenPtz={(cam) => setPtzCamera(cam)}
+                      isFocused={focusedCameraId === camera.id}
+                      onSelect={() => setFocusedCameraId(camera.id)}
+                    />
+                  )}
                   {gridMode !== "1x1" && (
                     <Button
                       variant="ghost"

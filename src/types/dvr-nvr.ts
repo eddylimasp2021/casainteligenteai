@@ -39,6 +39,11 @@ export interface IpCamera {
   snapshotUrl?: string; // Direct HTTP snapshot (e.g. /cgi-bin/snapshot.cgi)
   viewMode?: "auto" | "stream" | "snapshot" | "simulation"; // Display mode preference
   haEntityId?: string; // Optional Home Assistant camera entity (e.g. camera.portao)
+  streamName?: string; // Slug/Identifier in media gateway (e.g. garagem_rua)
+  gatewayHost?: string; // Media gateway host:port (default: localhost:1984)
+  activeProtocol?: "WebRTC" | "MSE" | "HLS" | "Snapshot"; // Real protocol used by player
+  lastFrameAt?: string; // ISO timestamp of last received frame
+  measuredLatencyMs?: number; // Measured latency in ms
 }
 
 export interface NvrRecording {
@@ -79,6 +84,46 @@ export interface StorageDisk {
 }
 
 export const INITIAL_CAMERAS: IpCamera[] = [
+  {
+    id: "cam-real-01",
+    name: "Câmera Garagem / Rua (Ao Vivo Real)",
+    roomName: "Garagem / Rua",
+    ip: "192.168.0.139",
+    port: 554,
+    onvifPort: 80,
+    manufacturer: "Generic",
+    model: "Câmera IP ONVIF (/onvif1)",
+    protocol: "RTSP",
+    rtspPath: "/onvif1",
+    subStreamPath: "/onvif2",
+    username: "admin",
+    password: "", // Senha protegida mantida no gateway local
+    streamName: "garagem_rua",
+    gatewayHost: "localhost:1984",
+    activeProtocol: "WebRTC",
+    resolution: "1080p (1920x1080)",
+    fps: 30,
+    bitrateKbps: 4096,
+    codec: "H.264",
+    status: "online",
+    hasPtz: false,
+    hasTwoWayAudio: true,
+    hasNightVision: true,
+    nightVisionActive: false,
+    recordingMode: "continuous",
+    viewMode: "stream",
+    aiFeatures: {
+      motionDetection: true,
+      humanDetection: true,
+      vehicleDetection: true,
+      lineCrossing: true,
+      facialRecognition: false,
+    },
+    presets: [
+      { id: 1, name: "Vista Geral Rua" },
+      { id: 2, name: "Portão Garagem" },
+    ],
+  },
   {
     id: "cam-01",
     name: "Entrada & Portão Principal",

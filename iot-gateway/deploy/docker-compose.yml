@@ -73,6 +73,33 @@ services:
         max-size: "20m"
         max-file: "5"
 
+  # -------------------------------------------------------------------
+  # 3. Gateway de Mídia de CFTV (go2rtc: RTSP -> WebRTC / HLS / MSE)
+  # -------------------------------------------------------------------
+  go2rtc:
+    image: alexxit/go2rtc:latest
+    container_name: ci-go2rtc
+    restart: unless-stopped
+    ports:
+      - "1984:1984"       # API REST, WebSockets e Interface Web
+      - "8554:8554"       # Servidor RTSP local
+      - "8555:8555/tcp"   # WebRTC TCP
+      - "8555:8555/udp"   # WebRTC UDP
+    volumes:
+      - ./go2rtc.yaml:/config/go2rtc.yaml:rw
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:1984/api || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - ci-iot-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
 volumes:
   mosquitto-data:
   mosquitto-log:
