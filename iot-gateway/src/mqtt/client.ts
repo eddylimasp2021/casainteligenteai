@@ -71,18 +71,18 @@ export class MqttTransport {
           { qos: 1, retain: true }
         );
 
-        // Subscribe to standard CI v1 namespaces:
-        // ci/v1/+/+/state, ci/v1/+/+/availability, ci/v1/+/+/result, ci/v1/+/+/telemetry
+        // Subscribe to standard CI v1 namespaces and Zigbee2MQTT:
         const subscriptions = [
           "ci/v1/+/+/state",
           "ci/v1/+/+/availability",
           "ci/v1/+/+/result",
           "ci/v1/+/+/telemetry",
+          `${this.config.ZIGBEE2MQTT_BASE_TOPIC}/#`,
         ];
 
         this.client?.subscribe(subscriptions, { qos: 1 }, (err) => {
           if (err) {
-            this.logger.error({ err: err.message }, "Failed to subscribe to CI v1 MQTT topics");
+            this.logger.error({ err: err.message }, "Failed to subscribe to MQTT topics");
           } else {
             this.logger.info({ subscriptions }, "Subscribed to MQTT topics");
           }
@@ -122,6 +122,18 @@ export class MqttTransport {
   private handleIncomingMessage(topic: string, payloadBuffer: Buffer) {
     if (payloadBuffer.length > this.maxPayloadBytes) {
       this.logger.warn({ topic, size: payloadBuffer.length }, "Dropped MQTT message exceeding max payload size");
+      return;
+    }
+
+    const z2mPrefix = this.config.ZIGBEE2MQTT_BASE_TOPIC;
+    if (topic === z2mPrefix || topic.startsWith(`${z2mPrefix}/`)) {
+      let raw: unknown;
+      try {
+        raw = JSON.parse(payloadBuffer.toString("utf8"));
+      } catch {
+        raw = payloadBuffer.toString("utf8");
+      }
+      this.eventBus.emitZigbeeMessage({ topic, payload: raw });
       return;
     }
 
@@ -229,6 +241,23 @@ export class MqttTransport {
           reject(err);
         } else {
           this.commandManager.transition(command.commandId, "SENT");
+          resolve();
+        }
+      });
+    });
+  }
+
+  public async publishRaw(topic: string, payload: string | Buffer, qos: 0 | 1 | 2 = 1): Promise<void> {
+    if (!this.client || !this.isConnected) {
+      throw new Error("MQTT transport is not connected to broker");
+    }
+
+    return new Promise((resolve, reject) => {
+      this.client?.publish(topic, payload, { qos, retain: false }, (err) => {
+        if (err) {
+          this.logger.error({ topic, err: err.message }, "Failed to publish raw MQTT message");
+          reject(err);
+        } else {
           resolve();
         }
       });

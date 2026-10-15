@@ -239,6 +239,14 @@ export class HomeAssistantAdapter implements IAdapter {
     };
   }
 
+  public async waitForConnected(timeoutMs = 5000): Promise<boolean> {
+    const start = Date.now();
+    while (!this.isConnected && Date.now() - start < timeoutMs) {
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    return this.isConnected;
+  }
+
   public getDiscoveredDevices(): UnifiedDevice[] {
     return Array.from(this.devices.values());
   }

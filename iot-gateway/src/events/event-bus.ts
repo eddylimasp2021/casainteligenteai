@@ -23,6 +23,11 @@ export interface DeviceTelemetryEvent {
   timestamp: string;
 }
 
+export interface ZigbeeMessageEvent {
+  topic: string;
+  payload: unknown;
+}
+
 export class GatewayEventBus extends EventEmitter {
   public emitDeviceState(event: DeviceStateEvent) {
     this.emit("device:state", event);
@@ -62,5 +67,13 @@ export class GatewayEventBus extends EventEmitter {
 
   public onCommandUpdated(listener: (command: StoredCommand) => void) {
     this.on("command:updated", listener);
+  }
+
+  public emitZigbeeMessage(event: ZigbeeMessageEvent) {
+    this.emit("z2m:message", event);
+  }
+
+  public onZigbeeMessage(listener: (event: ZigbeeMessageEvent) => void) {
+    this.on("z2m:message", listener);
   }
 }
