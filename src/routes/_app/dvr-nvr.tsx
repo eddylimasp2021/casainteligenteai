@@ -723,10 +723,11 @@ function DvrNvrPage() {
 
       {/* Dialogs and Modals */}
       <CameraManagerDialog
+        cameras={cameras}
         open={isCameraManagerOpen}
         onOpenChange={setIsCameraManagerOpen}
-        onSaveCamera={handleSaveCamera}
-        existingCamera={cameraToEdit}
+        onAddCamera={(cam) => setCameras((prev) => [...prev, cam])}
+        onDeleteCamera={(id) => setCameras((prev) => prev.filter((c) => c.id !== id))}
       />
 
       {ptzCamera && (
