@@ -17,23 +17,23 @@ const EnvSchema = z.object({
   MQTT_CONNECT_TIMEOUT_MS: z.coerce.number().min(1000).default(10000),
 
   // Home Assistant
-  HOME_ASSISTANT_URL: z.string().url().optional(),
-  HOME_ASSISTANT_TOKEN: z.string().optional(),
+  HOME_ASSISTANT_URL: z.string().url().optional().or(z.literal("")).transform((v) => v || undefined),
+  HOME_ASSISTANT_TOKEN: z.string().optional().or(z.literal("")).transform((v) => v || undefined),
 
   // Zigbee2MQTT
   ZIGBEE2MQTT_BASE_TOPIC: z.string().min(1).default("zigbee2mqtt"),
 
   // Matter
-  MATTER_CONTROLLER_URL: z.string().url().optional(),
+  MATTER_CONTROLLER_URL: z.string().url().optional().or(z.literal("")).transform((v) => v || undefined),
   MATTER_ENABLED: z.coerce.boolean().default(false),
 
   // Supabase Backend (pode usar Anon/Publishable Key + Auth de Usuário sem expor service_role)
-  SUPABASE_URL: z.string().url().optional(),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
-  SUPABASE_ANON_KEY: z.string().optional(),
-  HOUSEHOLD_ID: z.string().uuid().optional(),
-  GATEWAY_AUTH_EMAIL: z.string().email().optional(),
-  GATEWAY_AUTH_PASSWORD: z.string().optional(),
+  SUPABASE_URL: z.string().url().optional().or(z.literal("")).transform((v) => v || undefined),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional().or(z.literal("")).transform((v) => v || undefined),
+  SUPABASE_ANON_KEY: z.string().optional().or(z.literal("")).transform((v) => v || undefined),
+  HOUSEHOLD_ID: z.string().uuid().optional().or(z.literal("")).transform((v) => v || undefined),
+  GATEWAY_AUTH_EMAIL: z.string().email().optional().or(z.literal("")).transform((v) => v || undefined),
+  GATEWAY_AUTH_PASSWORD: z.string().optional().or(z.literal("")).transform((v) => v || undefined),
 
   // Embedded MQTT Broker (permite executar broker sem Docker no Windows)
   EMBEDDED_MQTT_BROKER: z.coerce.boolean().default(false),
@@ -53,6 +53,15 @@ let cachedConfig: GatewayConfig | null = null;
 export function loadConfig(overrideEnv?: Record<string, string | undefined>): GatewayConfig {
   if (cachedConfig && !overrideEnv) {
     return cachedConfig;
+  }
+
+  if (!overrideEnv && process.env.NODE_ENV !== "test") {
+    try {
+      // Native Node.js built-in .env loader
+      process.loadEnvFile();
+    } catch {
+      // Ignore if .env is missing
+    }
   }
 
   const env = overrideEnv ?? process.env;
