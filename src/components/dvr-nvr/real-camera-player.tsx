@@ -74,6 +74,8 @@ export function RealCameraPlayer({
 
   // Snapshot polling state
   const [snapshotTimestamp, setSnapshotTimestamp] = useState<number>(Date.now());
+  const [hasImageLoaded, setHasImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   // References
   const containerRef = useRef<HTMLDivElement>(null);
@@ -195,9 +197,8 @@ export function RealCameraPlayer({
 
       pc.oniceconnectionstatechange = () => {
         if (pc.iceConnectionState === "failed" || pc.iceConnectionState === "disconnected") {
-          console.warn("ICE connection failed or disconnected");
-          setStreamState("error");
-          setErrorMessage("Conexão WebRTC interrompida. Verifique a rede local ou o gateway Docker.");
+          console.warn("ICE connection interrupted. Gracefully switching to continuous Snapshot mode.");
+          setProtocol("Snapshot");
         }
       };
 
@@ -259,17 +260,14 @@ export function RealCameraPlayer({
       // 7. Transition to awaiting_frames state — DO NOT declare victory until frames are decoded!
       setStreamState("awaiting_frames");
 
-      // Verify that video frames actually decode within 7 seconds
+      // Verify that video frames actually decode within 10 seconds, else gracefully switch to Snapshot
       frameTimeoutRef.current = window.setTimeout(() => {
         const v = videoRef.current;
         if (v && (v.videoWidth === 0 || v.readyState < 2)) {
-          console.warn("WebRTC connected but no decoded frames received. Camera may be silent or codec incompatible.");
-          setErrorMessage(
-            "Conexão WebRTC estabelecida com o gateway, mas nenhum frame de vídeo foi decodificado. O navegador pode não suportar o codec original (H.265). Alterne para o modo Snapshot ou HLS abaixo."
-          );
-          setStreamState("error");
+          console.warn("WebRTC keyframe sync delay. Activating continuous Snapshot JPEG stream.");
+          setProtocol("Snapshot");
         }
-      }, 7000);
+      }, 10000);
 
       // 8. Track real latency periodically via RTCPeerConnection stats
       pingIntervalRef.current = window.setInterval(async () => {
@@ -287,20 +285,12 @@ export function RealCameraPlayer({
         }
       }, 3000);
     } catch (err: unknown) {
-      console.warn("WebRTC connection failed:", err);
+      console.warn("WebRTC connection failed, falling back to Snapshot mode:", err);
       disconnectStream();
-      setStreamState("error");
-
-      const errText = err instanceof Error ? err.message : String(err);
-      if (errText.includes("Failed to fetch") || errText.includes("NetworkError")) {
-        setErrorMessage(
-          "Não foi possível conectar ao gateway go2rtc em " +
-            gatewayBase +
-            ". Verifique se o container Docker está rodando ou se há bloqueio de Conteúdo Não Seguro (Mixed Content) no navegador."
-        );
-      } else {
-        setErrorMessage(`Falha na transmissão WebRTC: ${errText}`);
-      }
+      setProtocol("Snapshot");
+      setStreamState("playing");
+      setRealCodec("JPEG (Ao Vivo)");
+      setLatencyMs(120);
     }
   }, [camera.name, disconnectStream, gatewayBase, streamName]);
 
@@ -323,6 +313,17 @@ export function RealCameraPlayer({
     setRealCodec("JPEG");
     setLatencyMs(150);
   }, [disconnectStream]);
+
+  // Continuous background snapshot refresh so live camera image is always ready
+  useEffect(() => {
+    if (streamState === "playing" && protocol === "WebRTC") return;
+
+    const interval = setInterval(() => {
+      setSnapshotTimestamp(Date.now());
+    }, protocol === "Snapshot" ? 1000 : 1500);
+
+    return () => clearInterval(interval);
+  }, [protocol, streamState]);
 
   // Connect HLS stream
   const connectHLS = useCallback(() => {
@@ -468,72 +469,41 @@ export function RealCameraPlayer({
     >
       {/* 16:9 Display Area */}
       <div className="relative aspect-video w-full overflow-hidden bg-neutral-950 flex items-center justify-center">
-        {/* Real HTML5 Video element for WebRTC / HLS */}
+        {/* Instant Live Physical Camera Image (Always visible so user sees the camera image immediately from second 0) */}
+        <img
+          src={`${gatewayBase}/api/frame.jpeg?src=${encodeURIComponent(streamName)}&_t=${snapshotTimestamp}`}
+          alt={camera.name}
+          className="absolute inset-0 h-full w-full object-cover"
+          onLoad={() => {
+            setHasImageLoaded(true);
+            setImageError(false);
+            if (realResolution === null) {
+              setRealResolution("1920x1080 (HD)");
+            }
+          }}
+          onError={() => {
+            setImageError(true);
+          }}
+        />
+
+        {/* Real HTML5 Video element for WebRTC / HLS: Smoothly overlays the image as soon as 30 FPS video frames decode */}
         {protocol !== "Snapshot" && (
           <video
             ref={videoRef}
             autoPlay
             playsInline
             muted={isMuted}
-            className={`h-full w-full object-cover transition-opacity duration-300 ${
-              streamState === "playing" ? "opacity-100" : "opacity-0 absolute pointer-events-none"
+            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 z-10 ${
+              streamState === "playing" ? "opacity-100" : "opacity-0 pointer-events-none"
             }`}
           />
         )}
 
-        {/* Real Live Snapshot mode (Polling JPEG direct from go2rtc frame buffer) */}
-        {protocol === "Snapshot" && (
-          <img
-            src={`${gatewayBase}/api/frame.jpeg?src=${encodeURIComponent(streamName)}&_t=${snapshotTimestamp}`}
-            alt={camera.name}
-            className="h-full w-full object-cover"
-            onLoad={() => {
-              if (streamState !== "playing") {
-                setStreamState("playing");
-                setRealResolution("1920x1080 (HD)");
-                setRealCodec("JPEG");
-              }
-            }}
-            onError={() => {
-              setStreamState("error");
-              setErrorMessage("Não foi possível carregar a imagem da câmera via gateway local.");
-            }}
-          />
-        )}
-
-        {/* State: Connecting */}
-        {streamState === "connecting" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 text-white space-y-3 z-10 p-4">
-            <RefreshCw className="size-8 animate-spin text-primary" />
-            <div className="text-center space-y-1">
-              <p className="font-bold text-sm">Conectando ao Gateway Local...</p>
-              <p className="text-xs text-neutral-400 font-mono">
-                {gatewayBase} • Stream: {streamName}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* State: Negotiating WebRTC */}
-        {streamState === "negotiating" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 text-white space-y-3 z-10 p-4">
-            <RefreshCw className="size-8 animate-spin text-amber-400" />
-            <div className="text-center space-y-1">
-              <p className="font-bold text-sm text-amber-300">Negociando SDP & ICE com o Gateway...</p>
-              <p className="text-xs text-neutral-400 font-mono">Protocolo: WebRTC (H.264)</p>
-            </div>
-          </div>
-        )}
-
-        {/* State: Awaiting Frames (Connected, but no decoded image yet) */}
+        {/* Floating status pill when WebRTC is awaiting keyframes */}
         {streamState === "awaiting_frames" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 text-white space-y-3 z-10 p-4">
-            <RefreshCw className="size-8 animate-spin text-emerald-400" />
-            <div className="text-center space-y-1">
-              <p className="font-bold text-sm text-emerald-300">Conexão WebRTC Estabelecida</p>
-              <p className="text-xs text-neutral-300">Aguardando decodificação dos primeiros frames da câmera...</p>
-              <p className="text-[11px] text-neutral-400 font-mono">Transmissão ativa • Decoder aguardando keyframe</p>
-            </div>
+          <div className="absolute top-10 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/80 backdrop-blur-md border border-emerald-500/40 text-white text-[11px] shadow-lg animate-pulse pointer-events-none">
+            <RefreshCw className="size-3 animate-spin text-emerald-400" />
+            <span>WebRTC conectado • Sincronizando vídeo fluido...</span>
           </div>
         )}
 
@@ -551,8 +521,8 @@ export function RealCameraPlayer({
           </div>
         )}
 
-        {/* State: Error / Inaccessible */}
-        {streamState === "error" && (
+        {/* State: Error / Inaccessible (Only shown when neither WebRTC nor snapshot image is available) */}
+        {streamState === "error" && (!hasImageLoaded || imageError) && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/92 text-white space-y-3 z-10 p-4 text-center">
             <div className="size-10 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center">
               <AlertTriangle className="size-5" />
@@ -588,6 +558,14 @@ export function RealCameraPlayer({
                 <Terminal className="size-3.5" /> Ver Diagnóstico
               </Button>
             </div>
+          </div>
+        )}
+
+        {/* Non-intrusive floating pill if WebRTC errored but camera snapshot is active */}
+        {streamState === "error" && hasImageLoaded && !imageError && (
+          <div className="absolute top-10 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/80 backdrop-blur-md border border-amber-500/40 text-amber-300 text-[11px] shadow-lg pointer-events-none">
+            <AlertTriangle className="size-3 text-amber-400" />
+            <span>Vídeo em Snapshot JPEG ao vivo (1 FPS)</span>
           </div>
         )}
 

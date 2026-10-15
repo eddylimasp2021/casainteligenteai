@@ -17,13 +17,23 @@ rtsp:
 # 3. Servidor WebRTC para streaming de baixíssima latência (sub-100ms)
 webrtc:
   listen: ":8555"
-  # Candidatos ICE locais (STUN do Google para travessia NAT se necessário)
+  # Candidatos ICE para Docker no Windows: expor localhost e IP de LAN da máquina host
+  candidates:
+    - 127.0.0.1:8555
+    - 192.168.0.117:8555
+    - stun:8555
+  # STUN servers para travessia NAT se necessário
   ice_servers:
     - urls:
         - "stun:stun.l.google.com:19302"
         - "stun:stun1.l.google.com:19302"
 
-# 4. Configuração de Streams (Câmeras IP Registradas)
+# 4. Transcoder FFmpeg com baixa latência e baseline para navegadores
+ffmpeg:
+  bin: "ffmpeg"
+  h264: "-c:v libx264 -preset ultrafast -tune zerolatency -profile:v baseline -level 3.0 -pix_fmt yuv420p -g 15"
+
+# 5. Configuração de Streams (Câmeras IP Registradas)
 # Os fluxos podem ser definidos estaticamente aqui ou dinamicamente via API REST:
 # PUT http://localhost:1984/api/streams?name=garagem_rua&src=rtsp://admin:senha@192.168.0.139:554/onvif1
 streams:
