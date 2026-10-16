@@ -171,8 +171,8 @@ export function RealCameraPlayer({
 
   // Stream identifier registered in go2rtc (robust resolution for multi-lens and IP addresses)
   const streamName = useMemo(() => {
-    const rawId = (camera.id || "").split("__lens_")[0].trim();
-    const rawStream = (camera.streamName || "").split("__lens_")[0].trim();
+    const rawId = (camera.id || "").split("__lens_")[0]!.trim();
+    const rawStream = (camera.streamName || "").split("__lens_")[0]!.trim();
     const cleanIp = (camera.ip || "").trim();
     const lowerName = (camera.name || "").toLowerCase();
 
@@ -640,7 +640,7 @@ export function RealCameraPlayer({
             analyserRef.current.getByteFrequencyData(dataArray);
             let sum = 0;
             for (let i = 0; i < dataArray.length; i++) {
-              sum += dataArray[i];
+              sum += dataArray[i]!;
             }
             const avg = sum / dataArray.length;
             setMicLevel(Math.min(100, Math.round((avg / 128) * 100)));
@@ -654,7 +654,7 @@ export function RealCameraPlayer({
 
       // 3. Connect microphone track to WebRTC peer connection sender
       if (audioTransceiverRef.current?.sender) {
-        await audioTransceiverRef.current.sender.replaceTrack(micTrack);
+        await audioTransceiverRef.current.sender.replaceTrack(micTrack ?? null);
       }
 
       setIsTalking(true);
