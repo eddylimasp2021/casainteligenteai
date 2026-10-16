@@ -35,3 +35,4 @@ dist-ssr
 # Packages & archives
 pacotes/
 *.zip
+scratch/
