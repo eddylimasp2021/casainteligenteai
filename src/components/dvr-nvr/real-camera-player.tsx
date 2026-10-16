@@ -23,6 +23,7 @@ import {
   Zap,
   Image as ImageIcon,
   Circle,
+  Layers,
 } from "lucide-react";
 import type { IpCamera } from "@/types/dvr-nvr";
 import { Button } from "@/components/ui/button";
@@ -43,6 +44,7 @@ interface RealCameraPlayerProps {
   onOpenPtz?: (camera: IpCamera) => void;
   isFocused?: boolean;
   onSelect?: () => void;
+  selectedLens?: number; // Optional prop to display a specific physical lens (e.g. 1, 2, 3)
 }
 
 type StreamState =
@@ -61,6 +63,7 @@ export function RealCameraPlayer({
   onOpenPtz,
   isFocused = false,
   onSelect,
+  selectedLens,
 }: RealCameraPlayerProps) {
   // Protocol: WebRTC (sub-second) > Snapshot (resilient live JPEG) > HLS
   const [protocol, setProtocol] = useState<ProtocolType>(
@@ -84,6 +87,63 @@ export function RealCameraPlayer({
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [showDiagnostic, setShowDiagnostic] = useState(false);
   const [copiedCommand, setCopiedCommand] = useState(false);
+
+  // Multi-lens handling: Camera 192.168.0.240 or any camera with lensCount > 1
+  const totalLenses =
+    camera.lensCount ??
+    (camera.ip === "192.168.0.240" || camera.name?.toLowerCase().includes("240") ? 3 : 1);
+
+  // Active lens state: 0 = All (composite 3-in-1), 1 = Top, 2 = Middle, 3 = Bottom
+  const [activeLens, setActiveLens] = useState<number>(() => {
+    if (selectedLens !== undefined) return selectedLens;
+    if (camera.selectedLens !== undefined) return camera.selectedLens;
+    return totalLenses > 1 ? 1 : 0;
+  });
+
+  // Keep active lens in sync if props change
+  useEffect(() => {
+    if (selectedLens !== undefined) {
+      setActiveLens(selectedLens);
+    } else if (camera.selectedLens !== undefined) {
+      setActiveLens(camera.selectedLens);
+    }
+  }, [selectedLens, camera.selectedLens]);
+
+  const getLensLabel = useCallback((lens: number, total: number) => {
+    if (lens === 0) return `Todas (${total} em 1)`;
+    if (total === 3) {
+      if (lens === 1) return "Lente 1: Superior";
+      if (lens === 2) return "Lente 2: Central";
+      if (lens === 3) return "Lente 3: Inferior";
+    }
+    if (total === 2) {
+      if (lens === 1) return "Lente 1: Superior";
+      if (lens === 2) return "Lente 2: Inferior";
+    }
+    return `Lente ${lens} de ${total}`;
+  }, []);
+
+  // Compute CSS style for clean, distortion-free 16:9 lens isolation
+  const getMediaStyle = useCallback(() => {
+    if (totalLenses <= 1 || activeLens === 0) {
+      return {
+        position: "absolute" as const,
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        objectFit: "contain" as const,
+      };
+    }
+    const topPercent = -(activeLens - 1) * 100;
+    return {
+      position: "absolute" as const,
+      left: "0%",
+      width: "100%",
+      height: `${totalLenses * 100}%`,
+      top: `${topPercent}%`,
+      objectFit: "cover" as const,
+    };
+  }, [totalLenses, activeLens]);
 
   // Snapshot polling state
   const [snapshotTimestamp, setSnapshotTimestamp] = useState<number>(Date.now());
@@ -611,41 +671,94 @@ export function RealCameraPlayer({
     toast.info("Transmissão de voz encerrada.");
   }, []);
 
-  // Snapshot capture from frame
+  // Snapshot capture from frame (supports automatic multi-lens cropping)
   const handleCaptureSnapshot = () => {
-    if (protocol === "Snapshot") {
-      const snapUrl = `${gatewayBase}/api/frame.jpeg?src=${encodeURIComponent(streamName)}`;
-      const link = document.createElement("a");
-      link.download = `snapshot_${camera.id}_${Date.now()}.jpg`;
-      link.href = snapUrl;
-      link.target = "_blank";
-      link.click();
-      toast.success(`Foto exportada com sucesso: ${camera.name}!`);
-      return;
-    }
-
     const video = videoRef.current;
-    if (!video || video.videoWidth === 0) {
-      toast.error("O vídeo precisa estar recebendo frames para capturar a foto.");
+
+    // WebRTC or HLS video capture with canvas
+    if (protocol !== "Snapshot" && video && video.videoWidth > 0) {
+      try {
+        const fullW = video.videoWidth;
+        const fullH = video.videoHeight;
+        const canvas = document.createElement("canvas");
+
+        if (totalLenses > 1 && activeLens > 0) {
+          // Crop only the active lens (e.g. 1920x1080 from 1920x3240)
+          const singleH = Math.round(fullH / totalLenses);
+          const sourceY = (activeLens - 1) * singleH;
+          canvas.width = fullW;
+          canvas.height = singleH;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(video, 0, sourceY, fullW, singleH, 0, 0, fullW, singleH);
+            const link = document.createElement("a");
+            link.download = `snapshot_${camera.id}_lente_${activeLens}_${Date.now()}.jpg`;
+            link.href = canvas.toDataURL("image/jpeg", 0.95);
+            link.click();
+            toast.success(`Foto capturada da ${getLensLabel(activeLens, totalLenses)}!`);
+            return;
+          }
+        } else {
+          // Full stream capture
+          canvas.width = fullW;
+          canvas.height = fullH;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const link = document.createElement("a");
+            link.download = `snapshot_${camera.id}_${Date.now()}.jpg`;
+            link.href = canvas.toDataURL("image/jpeg", 0.95);
+            link.click();
+            toast.success(`Foto capturada com sucesso: ${camera.name}!`);
+            return;
+          }
+        }
+      } catch {
+        toast.error("Não foi possível exportar a foto do frame.");
+      }
+    }
+
+    // Direct Snapshot mode
+    const snapUrl = `${gatewayBase}/api/frame.jpeg?src=${encodeURIComponent(streamName)}`;
+    if (totalLenses > 1 && activeLens > 0) {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        try {
+          const fullW = img.width;
+          const fullH = img.height;
+          const singleH = Math.round(fullH / totalLenses);
+          const sourceY = (activeLens - 1) * singleH;
+          const canvas = document.createElement("canvas");
+          canvas.width = fullW;
+          canvas.height = singleH;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(img, 0, sourceY, fullW, singleH, 0, 0, fullW, singleH);
+            const link = document.createElement("a");
+            link.download = `snapshot_${camera.id}_lente_${activeLens}_${Date.now()}.jpg`;
+            link.href = canvas.toDataURL("image/jpeg", 0.95);
+            link.click();
+            toast.success(`Foto da ${getLensLabel(activeLens, totalLenses)} exportada!`);
+            return;
+          }
+        } catch {
+          window.open(snapUrl, "_blank");
+        }
+      };
+      img.onerror = () => {
+        window.open(snapUrl, "_blank");
+      };
+      img.src = `${snapUrl}&_t=${Date.now()}`;
       return;
     }
 
-    try {
-      const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const link = document.createElement("a");
-        link.download = `snapshot_${camera.id}_${Date.now()}.jpg`;
-        link.href = canvas.toDataURL("image/jpeg", 0.95);
-        link.click();
-        toast.success(`Foto real capturada com sucesso: ${camera.name}!`);
-      }
-    } catch {
-      toast.error("Não foi possível exportar a foto do frame.");
-    }
+    const link = document.createElement("a");
+    link.download = `snapshot_${camera.id}_${Date.now()}.jpg`;
+    link.href = snapUrl;
+    link.target = "_blank";
+    link.click();
+    toast.success(`Foto exportada com sucesso: ${camera.name}!`);
   };
 
   // Manual Video Recording (REC)
@@ -781,12 +894,13 @@ export function RealCameraPlayer({
         <img
           src={`${gatewayBase}/api/frame.jpeg?src=${encodeURIComponent(streamName)}&_t=${snapshotTimestamp}`}
           alt={camera.name}
-          className="absolute inset-0 h-full w-full object-cover"
+          style={getMediaStyle()}
+          className="transition-all duration-300 pointer-events-none"
           onLoad={() => {
             setHasImageLoaded(true);
             setImageError(false);
             if (realResolution === null) {
-              setRealResolution("1920x1080 (HD)");
+              setRealResolution(totalLenses > 1 && activeLens > 0 ? "1920x1080 (HD)" : "1920x3240 (3 Lentes)");
             }
           }}
           onError={() => {
@@ -801,7 +915,8 @@ export function RealCameraPlayer({
             autoPlay
             playsInline
             muted={isMuted}
-            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 z-10 ${
+            style={getMediaStyle()}
+            className={`transition-opacity duration-500 z-10 ${
               streamState === "playing" ? "opacity-100" : "opacity-0 pointer-events-none"
             }`}
           />
@@ -934,6 +1049,25 @@ export function RealCameraPlayer({
             <Badge variant="outline" className="h-4 border-white/20 bg-black/40 px-1 text-[9px] text-white">
               {camera.roomName}
             </Badge>
+
+            {/* Multi-Lens Switcher Pill in Top Bar */}
+            {totalLenses > 1 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const nextLens = activeLens >= totalLenses ? 0 : activeLens + 1;
+                  setActiveLens(nextLens);
+                  toast.info(`Alternado para: ${getLensLabel(nextLens, totalLenses)}`);
+                }}
+                className="pointer-events-auto flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-sans font-bold bg-primary/25 text-primary-foreground border border-primary/50 hover:bg-primary/40 transition-all cursor-pointer shadow-sm active:scale-95"
+                title="Clique para alternar entre as lentes (1, 2, 3 ou Todas)"
+              >
+                <Layers className="size-3 text-primary animate-pulse" />
+                <span>{getLensLabel(activeLens, totalLenses)}</span>
+              </button>
+            )}
+
             {isRecording && (
               <span className="flex items-center gap-1.5 font-bold text-rose-400 bg-rose-500/20 border border-rose-500/40 px-2 py-0.5 rounded text-[10px] animate-pulse">
                 <span className="size-2 rounded-full bg-rose-500 animate-ping" />
@@ -1017,7 +1151,11 @@ export function RealCameraPlayer({
         <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between p-2 text-[10px] font-mono text-neutral-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] bg-gradient-to-t from-black/90 via-black/40 to-transparent z-20">
           <div className="flex items-center gap-2">
             <span className="rounded bg-black/60 px-1 py-0.5 text-emerald-400 border border-emerald-500/30">
-              {realResolution || (streamState === "playing" ? "1920x1080" : "Sincronizando...")}
+              {totalLenses > 1
+                ? activeLens > 0
+                  ? `1920x1080 (L${activeLens}/${totalLenses})`
+                  : `1920x3240 (${totalLenses} em 1)`
+                : realResolution || (streamState === "playing" ? "1920x1080" : "Sincronizando...")}
             </span>
             <span>{camera.fps} FPS</span>
             <span className="uppercase text-amber-300">{realCodec || camera.codec}</span>
@@ -1114,6 +1252,52 @@ export function RealCameraPlayer({
             >
               <ImageIcon className="size-3" /> Foto
             </Button>
+
+            {/* Multi-Lens Quick Selector */}
+            {totalLenses > 1 && (
+              <>
+                <div className="mx-1 h-4 w-[1px] bg-white/20" />
+                <div className="flex items-center gap-0.5 rounded bg-white/10 p-0.5 border border-white/10">
+                  {Array.from({ length: totalLenses }, (_, i) => i + 1).map((lensNum) => (
+                    <Button
+                      key={lensNum}
+                      size="sm"
+                      variant="ghost"
+                      className={`h-6 px-1.5 text-[10px] font-bold ${
+                        activeLens === lensNum
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-neutral-300 hover:text-white"
+                      }`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveLens(lensNum);
+                        toast.info(`Exibindo ${getLensLabel(lensNum, totalLenses)}`);
+                      }}
+                      title={`Focar na Lente ${lensNum}`}
+                    >
+                      L{lensNum}
+                    </Button>
+                  ))}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className={`h-6 px-1.5 text-[10px] font-bold ${
+                      activeLens === 0
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-neutral-300 hover:text-white"
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveLens(0);
+                      toast.info(`Exibindo todas as lentes combinadas (${totalLenses} em 1)`);
+                    }}
+                    title="Ver todas as lentes completas"
+                  >
+                    Todas
+                  </Button>
+                </div>
+              </>
+            )}
 
             <div className="mx-1 h-4 w-[1px] bg-white/20" />
 

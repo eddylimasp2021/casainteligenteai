@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { 
   Camera, Plus, Trash2, Edit, Search, CheckCircle2, 
   AlertCircle, RefreshCw, Radio, Shield, Network, Server,
-  Video, Globe, HelpCircle, Info, Sparkles, KeyRound, Lock, Eye, EyeOff
+  Video, Globe, HelpCircle, Info, Sparkles, KeyRound, Lock, Eye, EyeOff, Layers
 } from "lucide-react";
 import type { IpCamera, CameraManufacturer, StreamProtocol } from "@/types/dvr-nvr";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -169,6 +169,8 @@ export function CameraManagerDialog({
   const [codec, setCodec] = useState<"H.265" | "H.264" | "MJPEG">("H.264");
   const [fps, setFps] = useState(30);
   const [bitrateKbps, setBitrateKbps] = useState(4096);
+  const [lensCount, setLensCount] = useState<number>(1);
+  const [splitLensesIntoGrid, setSplitLensesIntoGrid] = useState<boolean>(true);
 
   // Sync state when existingCamera changes or dialog opens
   useEffect(() => {
@@ -193,6 +195,16 @@ export function CameraManagerDialog({
       setCodec(existingCamera.codec || "H.264");
       setFps(existingCamera.fps || 30);
       setBitrateKbps(existingCamera.bitrateKbps || 4096);
+      setLensCount(
+        existingCamera.lensCount ??
+          (existingCamera.ip === "192.168.0.240" || existingCamera.name.toLowerCase().includes("240")
+            ? 3
+            : 1)
+      );
+      setSplitLensesIntoGrid(
+        existingCamera.splitLensesIntoGrid ??
+          (existingCamera.lensCount && existingCamera.lensCount > 1 ? true : false)
+      );
       setQuickRtspPaste("");
     } else {
       setName("");
@@ -215,6 +227,8 @@ export function CameraManagerDialog({
       setCodec("H.264");
       setFps(30);
       setBitrateKbps(4096);
+      setLensCount(1);
+      setSplitLensesIntoGrid(true);
       setQuickRtspPaste("");
     }
   }, [existingCamera, open]);
@@ -231,7 +245,13 @@ export function CameraManagerDialog({
         if (parsed.password) setPassword(parsed.password);
         setRtspPath(parsed.path);
         setSnapshotUrl(`http://${parsed.ip}/snapshot.jpg`);
-        if (!name || name.trim() === "") {
+
+        if (parsed.ip === "192.168.0.240") {
+          setLensCount(3);
+          setSplitLensesIntoGrid(true);
+          setName("Câmera Tripla Multi-Lente (3 Visões)");
+          setRoomName("Vigilância Externa");
+        } else if (!name || name.trim() === "") {
           if (parsed.ip === "192.168.0.139") {
             setName("Câmera Garagem / Rua");
             setRoomName("Garagem / Rua");
@@ -370,7 +390,7 @@ export function CameraManagerDialog({
         streamUrl: streamUrl.trim() || undefined,
         snapshotUrl: snapshotUrl.trim() || undefined,
         viewMode,
-        resolution: "1080p (1920x1080)",
+        resolution: Number(lensCount) > 1 ? `${Number(lensCount) * 1080}p (Multi-Lente)` : "1080p (1920x1080)",
         fps: Number(fps) || 30,
         bitrateKbps: Number(bitrateKbps) || 4096,
         codec,
@@ -379,6 +399,8 @@ export function CameraManagerDialog({
         hasTwoWayAudio,
         hasNightVision: true,
         recordingMode: "continuous",
+        lensCount: Number(lensCount) || 1,
+        splitLensesIntoGrid: Number(lensCount) > 1 ? splitLensesIntoGrid : false,
         aiFeatures: {
           motionDetection: true,
           humanDetection: true,
@@ -670,6 +692,59 @@ export function CameraManagerDialog({
                 onChange={(e) => setStreamUrl(e.target.value)}
                 className="font-mono text-xs"
               />
+            </div>
+
+            {/* Multi-Lens / Multiple Views Configuration */}
+            <div className="rounded-xl border border-primary/30 bg-primary/5 p-3.5 space-y-3 sm:col-span-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-primary flex items-center gap-1.5">
+                  <Layers className="size-4" /> Câmera Multi-Lente / Múltiplas Visões (Ex: 192.168.0.240)
+                </Label>
+                <Badge variant="outline" className="text-[10px] text-primary border-primary/30">
+                  {lensCount > 1 ? `${lensCount} Visões Habilitadas` : "1 Lente"}
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Quantidade de Lentes / Visões Físicas</Label>
+                  <Select
+                    value={String(lensCount)}
+                    onValueChange={(val) => {
+                      const count = Number(val);
+                      setLensCount(count);
+                      if (count > 1) setSplitLensesIntoGrid(true);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">1 Lente (Câmera Padrão / Sensor Único)</SelectItem>
+                      <SelectItem value="2">2 Lentes (Dupla Visão - Superior e Inferior)</SelectItem>
+                      <SelectItem value="3">3 Lentes (Tripla Visão 3-em-1 - Ex: 192.168.0.240)</SelectItem>
+                      <SelectItem value="4">4 Lentes (Quad Visão)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">
+                    Para câmeras que empilham 2, 3 ou 4 sensores ópticos num mesmo fluxo de vídeo.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between p-2.5 rounded-lg border border-border/60 bg-muted/20">
+                  <div>
+                    <Label className="text-xs font-semibold">Dividir em Telas Separadas</Label>
+                    <p className="text-[10px] text-muted-foreground">
+                      Gera {lensCount > 1 ? lensCount : 1} telas independentes de 16:9 na grade do NVR
+                    </p>
+                  </div>
+                  <Switch
+                    checked={splitLensesIntoGrid}
+                    onCheckedChange={setSplitLensesIntoGrid}
+                    disabled={lensCount <= 1}
+                  />
+                </div>
+              </div>
             </div>
 
             {/* PTZ and Audio Toggles */}

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Cctv,
   Video,
@@ -47,6 +47,7 @@ import { TimelinePlayback } from "@/components/dvr-nvr/timeline-playback";
 import { AiAnalyticsPanel } from "@/components/dvr-nvr/ai-analytics-panel";
 import { CameraManagerDialog } from "@/components/dvr-nvr/camera-manager-dialog";
 import { StorageSettingsDialog } from "@/components/dvr-nvr/storage-settings-dialog";
+import { MultiLensConfigDialog } from "@/components/dvr-nvr/multi-lens-config-dialog";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/dvr-nvr")({
@@ -86,13 +87,22 @@ function DvrNvrPage() {
     try {
       const saved = localStorage.getItem(CAMERAS_STORAGE_KEY);
       if (saved) {
-        const parsed = JSON.parse(saved) as IpCamera[];
+        let parsed = JSON.parse(saved) as IpCamera[];
         const hasRealCam = parsed.some(
           (c) => c.ip === "192.168.0.139" || c.streamName === "garagem_rua"
         );
         if (!hasRealCam && INITIAL_CAMERAS.length > 0) {
-          return [INITIAL_CAMERAS[0], ...parsed];
+          parsed = [INITIAL_CAMERAS[0], ...parsed];
         }
+
+        // Ensure 192.168.0.240 triple camera is present
+        const hasCam240 = parsed.some(
+          (c) => c.ip === "192.168.0.240" || c.streamName === "cam_192_168_0_240" || c.id === "cam-real-240"
+        );
+        if (!hasCam240 && INITIAL_CAMERAS.length > 1) {
+          parsed = [parsed[0], INITIAL_CAMERAS[1], ...parsed.slice(1)];
+        }
+
         return parsed.map((c) => {
           if (
             (c.ip === "192.168.0.139" || (c.name && c.name.toLowerCase().includes("garagem"))) &&
@@ -103,6 +113,16 @@ function DvrNvrPage() {
               streamName: "garagem_rua",
               gatewayHost: "localhost:1984",
               activeProtocol: "WebRTC",
+            };
+          }
+          if (c.ip === "192.168.0.240" || (c.name && c.name.toLowerCase().includes("240"))) {
+            return {
+              ...c,
+              streamName: "cam_192_168_0_240",
+              gatewayHost: "localhost:1984",
+              activeProtocol: "WebRTC",
+              lensCount: c.lensCount ?? 3,
+              splitLensesIntoGrid: c.splitLensesIntoGrid ?? true,
             };
           }
           return c;
@@ -155,6 +175,14 @@ function DvrNvrPage() {
   const [cameraToEdit, setCameraToEdit] = useState<IpCamera | null>(null);
   const [ptzCamera, setPtzCamera] = useState<IpCamera | null>(null);
   const [isStorageSettingsOpen, setIsStorageSettingsOpen] = useState(false);
+  const [isMultiLensModalOpen, setIsMultiLensModalOpen] = useState(false);
+
+  // Helper to open PTZ targeting root camera even when clicked on virtual sub-channel
+  const handleOpenPtz = (cam: IpCamera) => {
+    const baseId = cam.id.split("__lens_")[0];
+    const baseCam = cameras.find((c) => c.id === baseId) || cam;
+    setPtzCamera(baseCam);
+  };
 
   // General Alarm state
   const [isSirenActive, setIsSirenActive] = useState(false);
@@ -294,15 +322,50 @@ function DvrNvrPage() {
     toast.success("Gravação Manual Emergencial ativada em todos os canais simultaneamente.");
   };
 
+  // Expand multi-lens cameras into individual grid channels when splitLensesIntoGrid is active
+  const gridChannels = useMemo(() => {
+    const list: IpCamera[] = [];
+    for (const cam of cameras) {
+      const total =
+        cam.lensCount ??
+        (cam.ip === "192.168.0.240" || cam.name.toLowerCase().includes("240") ? 3 : 1);
+      const shouldSplit = cam.splitLensesIntoGrid ?? (total > 1);
+
+      if (total > 1 && shouldSplit) {
+        for (let lens = 1; lens <= total; lens++) {
+          const label =
+            total === 3
+              ? lens === 1
+                ? "Lente 1: Superior"
+                : lens === 2
+                ? "Lente 2: Central"
+                : "Lente 3: Inferior"
+              : `Lente ${lens}`;
+
+          list.push({
+            ...cam,
+            id: `${cam.id}__lens_${lens}`,
+            name: `${cam.name} — ${label}`,
+            selectedLens: lens,
+            lensCount: total,
+          });
+        }
+      } else {
+        list.push(cam);
+      }
+    }
+    return list;
+  }, [cameras]);
+
   // Determine cameras to render in grid
-  let displayedCameras = cameras;
+  let displayedCameras = gridChannels;
   if (gridMode === "1x1") {
-    const found = cameras.find((c) => c.id === focusedCameraId);
-    displayedCameras = found ? [found] : cameras.slice(0, 1);
+    const found = gridChannels.find((c) => c.id === focusedCameraId);
+    displayedCameras = found ? [found] : gridChannels.slice(0, 1);
   } else if (gridMode === "2x2") {
-    displayedCameras = cameras.slice(0, 4);
+    displayedCameras = gridChannels.slice(0, 4);
   } else if (gridMode === "3x3") {
-    displayedCameras = cameras.slice(0, 9);
+    displayedCameras = gridChannels.slice(0, 9);
   }
 
   return (
@@ -350,6 +413,18 @@ function DvrNvrPage() {
           >
             <Video className="size-4" />
             REC Todos
+          </Button>
+
+          {/* Multi-Lens Cameras Configuration Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsMultiLensModalOpen(true)}
+            className="gap-1.5 text-xs border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary font-semibold shadow-sm"
+            title="Configurar câmeras com múltiplas lentes / visões (Ex: 192.168.0.240 com 3 telas)"
+          >
+            <Layers className="size-4" />
+            Multi-Lente (3 Visões)
           </Button>
 
           <Button
@@ -557,21 +632,21 @@ function DvrNvrPage() {
               <div className="lg:col-span-2">
                 {viewEngine === "real" ? (
                   <RealCameraPlayer
-                    camera={cameras.find((c) => c.id === focusedCameraId) || cameras[0]!}
+                    camera={gridChannels.find((c) => c.id === focusedCameraId) || gridChannels[0]!}
                     gatewayUrl={gatewayUrl}
-                    onOpenPtz={(cam) => setPtzCamera(cam)}
+                    onOpenPtz={handleOpenPtz}
                     isFocused={true}
                   />
                 ) : (
                   <LiveCameraView
-                    camera={cameras.find((c) => c.id === focusedCameraId) || cameras[0]!}
-                    onOpenPtz={(cam) => setPtzCamera(cam)}
+                    camera={gridChannels.find((c) => c.id === focusedCameraId) || gridChannels[0]!}
+                    onOpenPtz={handleOpenPtz}
                   />
                 )}
               </div>
               <div className="space-y-3 max-h-[700px] overflow-y-auto pr-1">
-                {cameras
-                  .filter((c) => c.id !== (focusedCameraId || cameras[0]?.id))
+                {gridChannels
+                  .filter((c) => c.id !== (focusedCameraId || gridChannels[0]?.id))
                   .slice(0, 5)
                   .map((cam) => (
                     <div
@@ -584,12 +659,12 @@ function DvrNvrPage() {
                         <RealCameraPlayer
                           camera={cam}
                           gatewayUrl={gatewayUrl}
-                          onOpenPtz={(c) => setPtzCamera(c)}
+                          onOpenPtz={handleOpenPtz}
                         />
                       ) : (
                         <LiveCameraView
                           camera={cam}
-                          onOpenPtz={(c) => setPtzCamera(c)}
+                          onOpenPtz={handleOpenPtz}
                         />
                       )}
                     </div>
@@ -613,14 +688,14 @@ function DvrNvrPage() {
                     <RealCameraPlayer
                       camera={camera}
                       gatewayUrl={gatewayUrl}
-                      onOpenPtz={(cam) => setPtzCamera(cam)}
+                      onOpenPtz={handleOpenPtz}
                       isFocused={focusedCameraId === camera.id}
                       onSelect={() => setFocusedCameraId(camera.id)}
                     />
                   ) : (
                     <LiveCameraView
                       camera={camera}
-                      onOpenPtz={(cam) => setPtzCamera(cam)}
+                      onOpenPtz={handleOpenPtz}
                       isFocused={focusedCameraId === camera.id}
                       onSelect={() => setFocusedCameraId(camera.id)}
                     />
@@ -648,7 +723,7 @@ function DvrNvrPage() {
           {gridMode === "1x1" && (
             <div className="flex items-center gap-2 overflow-x-auto p-2 bg-muted/20 border border-border/40 rounded-xl">
               <span className="text-xs text-muted-foreground whitespace-nowrap pl-2">Trocar Câmera:</span>
-              {cameras.map((c) => (
+              {gridChannels.map((c) => (
                 <Button
                   key={c.id}
                   variant={focusedCameraId === c.id ? "default" : "outline"}
@@ -721,7 +796,14 @@ function DvrNvrPage() {
                   {cameras.map((c) => (
                     <tr key={c.id} className="hover:bg-muted/20 transition-colors">
                       <td className="py-3 px-4">
-                        <div className="font-semibold text-foreground">{c.name}</div>
+                        <div className="flex items-center gap-2">
+                          <div className="font-semibold text-foreground">{c.name}</div>
+                          {c.lensCount && c.lensCount > 1 && (
+                            <Badge variant="secondary" className="text-[10px] bg-primary/20 text-primary border-primary/30 gap-1 font-mono">
+                              <Layers className="size-3" /> {c.lensCount} Lentes
+                            </Badge>
+                          )}
+                        </div>
                         <div className="text-[11px] text-muted-foreground">{c.roomName}</div>
                       </td>
                       <td className="py-3 px-4">
@@ -750,7 +832,18 @@ function DvrNvrPage() {
                           ● {c.status.toUpperCase()}
                         </Badge>
                       </td>
-                      <td className="py-3 px-4 text-right space-x-2">
+                      <td className="py-3 px-4 text-right space-x-1 sm:space-x-2">
+                        {c.lensCount && c.lensCount > 1 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setIsMultiLensModalOpen(true)}
+                            className="h-7 px-2 text-xs text-primary hover:bg-primary/10 gap-1 font-semibold"
+                            title="Configurar Lentes e Múltiplas Visões"
+                          >
+                            <Layers className="size-3" /> Visões ({c.lensCount})
+                          </Button>
+                        )}
                         {c.hasPtz && (
                           <Button
                             variant="ghost"
@@ -971,6 +1064,17 @@ function DvrNvrPage() {
         cameras={cameras}
         storageConfig={storageConfig}
         onSaveStorageConfig={setStorageConfig}
+      />
+
+      {/* Multi-Lens Configuration Modal */}
+      <MultiLensConfigDialog
+        open={isMultiLensModalOpen}
+        onOpenChange={setIsMultiLensModalOpen}
+        cameras={cameras}
+        onUpdateCameras={(updated) => {
+          setCameras(updated);
+          localStorage.setItem(CAMERAS_STORAGE_KEY, JSON.stringify(updated));
+        }}
       />
     </div>
   );

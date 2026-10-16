@@ -44,6 +44,9 @@ export interface IpCamera {
   activeProtocol?: "WebRTC" | "MSE" | "HLS" | "Snapshot"; // Real protocol used by player
   lastFrameAt?: string; // ISO timestamp of last received frame
   measuredLatencyMs?: number; // Measured latency in ms
+  lensCount?: number; // Multi-lens count: 1 (standard), 2 (dual), 3 (triple 3-in-1), 4 (quad)
+  selectedLens?: number; // 0 = all/composite, 1 = lens 1 (top), 2 = lens 2 (middle), 3 = lens 3 (bottom)
+  splitLensesIntoGrid?: boolean; // Whether to expand into multiple individual screens in the DVR grid
 }
 
 export interface NvrRecording {
@@ -151,6 +154,50 @@ export const INITIAL_CAMERAS: IpCamera[] = [
     presets: [
       { id: 1, name: "Vista Geral Rua" },
       { id: 2, name: "Portão Garagem" },
+    ],
+  },
+  {
+    id: "cam-real-240",
+    name: "Câmera Tripla Multi-Lente (3 Visões)",
+    roomName: "Vigilância Externa",
+    ip: "192.168.0.240",
+    port: 554,
+    onvifPort: 5000,
+    manufacturer: "Generic",
+    model: "Câmera IP Tripla (3 Lentes 1920x3240)",
+    protocol: "RTSP",
+    rtspPath: "/onvif1",
+    subStreamPath: "/onvif2",
+    username: "admin",
+    password: "",
+    streamName: "cam_192_168_0_240",
+    gatewayHost: "localhost:1984",
+    activeProtocol: "WebRTC",
+    resolution: "3240p (1920x3240 - 3 Lentes Full HD)",
+    fps: 30,
+    bitrateKbps: 4096,
+    codec: "H.265",
+    status: "online",
+    hasPtz: true,
+    hasTwoWayAudio: true,
+    hasNightVision: true,
+    nightVisionActive: false,
+    recordingMode: "continuous",
+    viewMode: "stream",
+    lensCount: 3,
+    selectedLens: 0,
+    splitLensesIntoGrid: true,
+    aiFeatures: {
+      motionDetection: true,
+      humanDetection: true,
+      vehicleDetection: true,
+      lineCrossing: true,
+      facialRecognition: false,
+    },
+    presets: [
+      { id: 1, name: "Lente 1 (Superior)" },
+      { id: 2, name: "Lente 2 (Central)" },
+      { id: 3, name: "Lente 3 (Inferior)" },
     ],
   },
   {

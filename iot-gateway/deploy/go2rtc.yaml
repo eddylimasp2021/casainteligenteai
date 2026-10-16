@@ -52,10 +52,16 @@ streams:
     - rtsp://admin:ambar786@192.168.0.198:554/onvif1
     - rtsp://admin:ambar786@192.168.0.198:554/onvif1#backchannel=1
 
-  # Câmera 192.168.0.240 (Áudio Bidirecional / Interfone)
+  # Câmera 192.168.0.240 (Câmera Tripla Multi-Lente 3 em 1 - 1920x3240 Full HD)
   cam_192_168_0_240:
-    - rtsp://admin:ambar786@192.168.0.240:554/onvif1
-    - rtsp://admin:ambar786@192.168.0.240:554/onvif1#backchannel=1
+    - rtsp://admin:ambar786@@192.168.0.240:554/onvif1
+    - rtsp://admin:ambar786@@192.168.0.240:554/onvif1#backchannel=1
+
+  # Câmera 192.168.0.240 H.264 (Transcodificado para navegadores sem suporte a HEVC)
+  cam_192_168_0_240_h264:
+    - ffmpeg:rtsp://127.0.0.1:8554/cam_192_168_0_240#video=h264#audio=copy
+    - rtsp://admin:ambar786@@192.168.0.240:554/onvif1#backchannel=1
+
 
 # 5. Configuração de Logs com Rotação
 log:
