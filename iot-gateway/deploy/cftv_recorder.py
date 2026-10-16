@@ -32,6 +32,12 @@ GO2RTC_BASE = f"http://{GO2RTC_HOST}:{GO2RTC_PORT}"
 RECORDINGS_DIR = os.environ.get("RECORDINGS_DIR", "/recordings")
 SEGMENT_SECONDS = int(os.environ.get("SEGMENT_SECONDS", "900"))  # 15 minutes per chunk
 
+ACTIVE_TUNNEL_INFO = {
+    "url": "https://diamonds-supports-screens-heat.trycloudflare.com",
+    "updated_at": datetime.now().isoformat(),
+    "status": "online"
+}
+
 CAMERAS = [
     {
         "id": "garagem_rua",
@@ -158,6 +164,11 @@ class CFTVGatewayHandler(BaseHTTPRequestHandler):
             self.handle_list_recordings(query)
             return
 
+        # 1.1 API: Active Tunnel Info
+        if path == "/api/tunnel_info":
+            self.send_json_response(ACTIVE_TUNNEL_INFO)
+            return
+
         # 2. API: List available recording dates
         if path == "/api/recordings/dates":
             self.handle_list_dates(query)
@@ -180,7 +191,23 @@ class CFTVGatewayHandler(BaseHTTPRequestHandler):
         self.proxy_to_go2rtc("HEAD")
 
     def do_POST(self):
-        # Forward all POSTs (e.g. WebRTC SDP negotiation) to go2rtc
+        # Update tunnel URL
+        if self.path == "/api/tunnel_info":
+            content_len = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_len) if content_len > 0 else b"{}"
+            try:
+                data = json.loads(body.decode("utf-8"))
+                new_url = data.get("url", "").strip()
+                if new_url:
+                    ACTIVE_TUNNEL_INFO["url"] = new_url
+                    ACTIVE_TUNNEL_INFO["updated_at"] = datetime.now().isoformat()
+                    ACTIVE_TUNNEL_INFO["status"] = "online"
+                self.send_json_response({"status": "ok", "tunnel": ACTIVE_TUNNEL_INFO})
+            except Exception as e:
+                self.send_json_response({"status": "error", "message": str(e)})
+            return
+
+        # Forward all other POSTs (e.g. WebRTC SDP negotiation) to go2rtc
         self.proxy_to_go2rtc("POST")
 
     def do_PUT(self):

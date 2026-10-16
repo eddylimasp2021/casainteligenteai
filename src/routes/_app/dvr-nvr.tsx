@@ -28,6 +28,13 @@ import {
   Server,
   Globe,
   Lock,
+  Bot,
+  Wifi,
+  ShieldCheck,
+  ClipboardPaste,
+  ExternalLink,
+  Zap,
+  Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -228,7 +235,32 @@ function DvrNvrPage() {
 
   // View Engine: "real" (WebRTC via Docker Media Gateway go2rtc) vs "simulation" (AI Canvas)
   const [viewEngine, setViewEngine] = useState<"real" | "simulation">("real");
-  const CURRENT_CLOUDFLARE_TUNNEL = "https://diamonds-supports-screens-heat.trycloudflare.com";
+  const CURRENT_CLOUDFLARE_TUNNEL = "https://usb-recommendations-harvey-ram.trycloudflare.com";
+  
+  // Connection Mode: "robot" (Auto-Sync) | "lan" (Rede Local Direta) | "permanent" (Túnel Fixo Zero Trust)
+  const [connectionMode, setConnectionMode] = useState<"robot" | "lan" | "permanent">(() => {
+    try {
+      const savedMode = localStorage.getItem("homepulse_dvr_connection_mode_v1");
+      if (savedMode === "lan" || savedMode === "permanent" || savedMode === "robot") {
+        return savedMode;
+      }
+    } catch {}
+    return "robot"; // Padrão: Modo 2 (Robô Auto-Sync para a casa teste)
+  });
+
+  const [permanentUrl, setPermanentUrl] = useState<string>(() => {
+    try {
+      return localStorage.getItem("homepulse_dvr_permanent_url_v1") || "";
+    } catch {}
+    return "";
+  });
+  const [permanentToken, setPermanentToken] = useState<string>(() => {
+    try {
+      return localStorage.getItem("homepulse_dvr_permanent_token_v1") || "";
+    } catch {}
+    return "";
+  });
+
   const [gatewayUrl, setGatewayUrl] = useState<string>(() => {
     try {
       const saved = localStorage.getItem("homepulse_dvr_gateway_url_v1");
@@ -245,6 +277,58 @@ function DvrNvrPage() {
   });
   const [isGatewayModalOpen, setIsGatewayModalOpen] = useState(false);
   const [tempGatewayUrl, setTempGatewayUrl] = useState(gatewayUrl);
+  const [isTestingPing, setIsTestingPing] = useState(false);
+  const [pingResult, setPingResult] = useState<{ status: "ok" | "error"; latency?: number; streamsCount?: number; message?: string } | null>(null);
+
+  // Ping test helper
+  const handleTestPing = async (urlToTest?: string) => {
+    const target = (urlToTest || tempGatewayUrl || gatewayUrl).trim().replace(/\/$/, "");
+    if (!target) return;
+    setIsTestingPing(true);
+    setPingResult(null);
+
+    const start = performance.now();
+    try {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 4000);
+      const res = await fetch(`${target}/api/streams`, { signal: ctrl.signal });
+      clearTimeout(tid);
+      const latency = Math.round(performance.now() - start);
+
+      if (res.ok) {
+        const data = await res.json();
+        const count = Object.keys(data || {}).length;
+        setPingResult({ status: "ok", latency, streamsCount: count });
+      } else {
+        setPingResult({ status: "error", message: `HTTP ${res.status}: ${res.statusText}` });
+      }
+    } catch (e: any) {
+      setPingResult({ status: "error", message: e?.message || "Falha ao conectar no Gateway" });
+    } finally {
+      setIsTestingPing(false);
+    }
+  };
+
+  // Clipboard paste helper for Auto-Sync
+  const handlePasteFromClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text && (text.includes("trycloudflare.com") || text.includes("http://") || text.includes("https://"))) {
+        const clean = text.trim();
+        setTempGatewayUrl(clean);
+        toast.success("URL capturada da Área de Transferência com sucesso!", {
+          description: clean,
+        });
+        handleTestPing(clean);
+      } else {
+        toast.info("Nenhuma URL de túnel válida foi encontrada na sua Área de Transferência.", {
+          description: "Execute o INICIAR_CFTV_HOMEPULSE.bat para copiar o link atual.",
+        });
+      }
+    } catch {
+      toast.error("Não foi possível acessar a Área de Transferência do navegador.");
+    }
+  };
 
   // Auto-healing: Test active gateway URL and recover to CURRENT_CLOUDFLARE_TUNNEL if unreachable
   useEffect(() => {
@@ -1270,71 +1354,230 @@ function DvrNvrPage() {
             </div>
           </DialogHeader>
 
-          <div className="space-y-4 py-2 text-xs">
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold">Endereço do Gateway (URL):</Label>
-              <Input
-                value={tempGatewayUrl}
-                onChange={(e) => setTempGatewayUrl(e.target.value)}
-                placeholder="Ex: https://...trycloudflare.com ou http://127.0.0.1:1984"
-                className="font-mono text-xs"
-              />
-            </div>
+          <div className="space-y-4 py-1 text-xs">
+            {/* 3 Modes Selector Tabs */}
+            <Tabs
+              value={connectionMode}
+              onValueChange={(val: any) => {
+                setConnectionMode(val);
+                try {
+                  localStorage.setItem("homepulse_dvr_connection_mode_v1", val);
+                } catch {}
+                if (val === "robot") {
+                  setTempGatewayUrl(CURRENT_CLOUDFLARE_TUNNEL);
+                } else if (val === "lan") {
+                  setTempGatewayUrl("http://127.0.0.1:1984");
+                } else if (val === "permanent" && permanentUrl) {
+                  setTempGatewayUrl(permanentUrl);
+                }
+              }}
+              className="w-full"
+            >
+              <TabsList className="grid grid-cols-3 w-full bg-muted/60 p-1">
+                <TabsTrigger value="robot" className="gap-1.5 text-xs py-1.5">
+                  <Bot className="size-3.5 text-emerald-400" /> Auto-Sync
+                </TabsTrigger>
+                <TabsTrigger value="lan" className="gap-1.5 text-xs py-1.5">
+                  <Wifi className="size-3.5 text-blue-400" /> Rede Local
+                </TabsTrigger>
+                <TabsTrigger value="permanent" className="gap-1.5 text-xs py-1.5">
+                  <ShieldCheck className="size-3.5 text-purple-400" /> Túnel Fixo
+                </TabsTrigger>
+              </TabsList>
 
-            <div className="space-y-1.5">
-              <span className="text-[11px] font-semibold text-muted-foreground">Preenchimento Rápido:</span>
-              <div className="grid grid-cols-1 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setTempGatewayUrl(CURRENT_CLOUDFLARE_TUNNEL)}
-                  className="flex items-start gap-2 p-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-left transition-colors"
-                >
-                  <Lock className="size-4 text-emerald-400 shrink-0 mt-0.5" />
-                  <div>
-                    <div className="font-semibold text-foreground text-xs flex items-center gap-1.5">
-                      Túnel HTTPS Seguro Cloudflare <Badge className="bg-emerald-500/20 text-emerald-300 text-[9px] py-0">Recomendado para Lovable</Badge>
-                    </div>
-                    <div className="font-mono text-[10px] text-emerald-300/80 truncate">
-                      {CURRENT_CLOUDFLARE_TUNNEL}
-                    </div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">
-                      Sem bloqueio de Mixed Content • Suporta Vídeo Ao Vivo e Gravações NVR
-                    </div>
+              {/* MODO 2: ROBÔ AUTO-SYNC (ATIVO PARA CASA TESTE) */}
+              <TabsContent value="robot" className="space-y-3 pt-3 m-0">
+                <div className="p-3 rounded-lg border border-emerald-500/40 bg-emerald-500/10 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-xs flex items-center gap-1.5 text-emerald-300">
+                      <Bot className="size-4 text-emerald-400" /> Robô de Auto-Sincronização Ativo
+                    </span>
+                    <Badge className="bg-emerald-500/20 text-emerald-300 text-[9px] py-0 border-emerald-500/40">
+                      Casa Teste
+                    </Badge>
                   </div>
-                </button>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Sempre que o container do Docker reinicia, o robô captura o novo link temporário da Cloudflare automaticamente. O script <code>INICIAR_CFTV_HOMEPULSE.bat</code> já copia o link ativo para a sua área de transferência.
+                  </p>
+                </div>
 
-                <button
-                  type="button"
-                  onClick={() => setTempGatewayUrl("http://127.0.0.1:1984")}
-                  className="flex items-start gap-2 p-2 rounded-lg border border-border/60 bg-muted/40 hover:bg-muted/70 text-left transition-colors"
-                >
-                  <Server className="size-4 text-amber-400 shrink-0 mt-0.5" />
-                  <div>
-                    <div className="font-semibold text-foreground text-xs">
-                      Rede Local Direta (127.0.0.1:1984)
-                    </div>
-                    <div className="font-mono text-[10px] text-muted-foreground truncate">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">URL Ativa Detectada:</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={tempGatewayUrl}
+                      onChange={(e) => setTempGatewayUrl(e.target.value)}
+                      placeholder="https://...trycloudflare.com"
+                      className="font-mono text-xs"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handlePasteFromClipboard}
+                      className="shrink-0 gap-1.5 text-xs bg-muted/60 hover:bg-muted"
+                      title="Colar URL copiada pelo script da Área de Transferência"
+                    >
+                      <ClipboardPaste className="size-3.5 text-primary" /> Colar do Robô
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setTempGatewayUrl(CURRENT_CLOUDFLARE_TUNNEL);
+                      handleTestPing(CURRENT_CLOUDFLARE_TUNNEL);
+                    }}
+                    className="h-7 text-[11px] gap-1.5 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10"
+                  >
+                    <RefreshCw className="size-3" /> Restaurar Túnel Atual
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => handleTestPing()}
+                    disabled={isTestingPing}
+                    className="h-7 text-[11px] gap-1.5"
+                  >
+                    <Activity className={`size-3 ${isTestingPing ? "animate-spin" : ""}`} />
+                    {isTestingPing ? "Testando..." : "Testar Conexão / Ping"}
+                  </Button>
+                </div>
+              </TabsContent>
+
+              {/* MODO 1: REDE LOCAL DIRETA (LAN) */}
+              <TabsContent value="lan" className="space-y-3 pt-3 m-0">
+                <div className="p-3 rounded-lg border border-blue-500/40 bg-blue-500/10 space-y-1">
+                  <div className="font-semibold text-xs flex items-center gap-1.5 text-blue-300">
+                    <Wifi className="size-4 text-blue-400" /> Conexão Local Direta (Sem Internet)
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Comunica diretamente na sua rede Wi-Fi/cabo com a porta <code>1984</code> do Docker. Ideal ao usar o projeto localmente via <code>npm run dev</code> ou aplicativo para Windows.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-[11px] font-semibold text-muted-foreground">Preenchimento Direto:</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setTempGatewayUrl("http://127.0.0.1:1984");
+                        handleTestPing("http://127.0.0.1:1984");
+                      }}
+                      className="h-8 text-xs justify-start font-mono text-[11px]"
+                    >
                       http://127.0.0.1:1984
-                    </div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">
-                      Para uso local ou executando o projeto com npm run preview
-                    </div>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setTempGatewayUrl("http://192.168.0.117:1984");
+                        handleTestPing("http://192.168.0.117:1984");
+                      }}
+                      className="h-8 text-xs justify-start font-mono text-[11px]"
+                    >
+                      http://192.168.0.117:1984
+                    </Button>
                   </div>
-                </button>
-              </div>
-            </div>
+                </div>
 
-            <div className="p-3 rounded-lg border border-border/60 bg-muted/30 space-y-1 text-[11px] text-muted-foreground">
-              <div className="font-semibold text-foreground flex items-center gap-1.5">
-                <Globe className="size-3.5 text-primary" /> Como funciona o Acesso Seguro no Lovable?
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Endereço Personalizado:</Label>
+                  <Input
+                    value={tempGatewayUrl}
+                    onChange={(e) => setTempGatewayUrl(e.target.value)}
+                    placeholder="http://127.0.0.1:1984"
+                    className="font-mono text-xs"
+                  />
+                </div>
+              </TabsContent>
+
+              {/* MODO 3: TÚNEL FIXO PERMANENTE (CLOUDFLARE ZERO TRUST) */}
+              <TabsContent value="permanent" className="space-y-3 pt-3 m-0">
+                <div className="p-3 rounded-lg border border-purple-500/40 bg-purple-500/10 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-xs flex items-center gap-1.5 text-purple-300">
+                      <ShieldCheck className="size-4 text-purple-400" /> Túnel Permanente Cloudflare (100% Grátis)
+                    </span>
+                    <Badge className="bg-purple-500/20 text-purple-300 text-[9px] py-0 border-purple-500/40">
+                      Recomendado p/ Produção
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Com um token fixo da Cloudflare, <strong>a URL nunca mais muda</strong>, mesmo reiniciando o computador, o Docker ou caindo a energia.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold">Sua URL Fixa Definitiva:</Label>
+                  <Input
+                    value={tempGatewayUrl}
+                    onChange={(e) => {
+                      setTempGatewayUrl(e.target.value);
+                      setPermanentUrl(e.target.value);
+                      try {
+                        localStorage.setItem("homepulse_dvr_permanent_url_v1", e.target.value);
+                      } catch {}
+                    }}
+                    placeholder="Ex: https://cftv.seudominio.com ou https://meu-tunnel-fixo.cf"
+                    className="font-mono text-xs"
+                  />
+                </div>
+
+                <div className="p-2.5 rounded-lg border border-border/60 bg-muted/20 space-y-1.5 text-[11px] text-muted-foreground">
+                  <div className="font-semibold text-foreground flex items-center gap-1">
+                    <ExternalLink className="size-3 text-primary" /> Como obter seu Token Fixo em 3 passos:
+                  </div>
+                  <ol className="list-decimal list-inside space-y-1 pl-1">
+                    <li>Acesse <a href="https://one.dash.cloudflare.com/" target="_blank" rel="noreferrer" className="text-primary underline">one.dash.cloudflare.com</a> (grátis).</li>
+                    <li>Vá em <strong>Networks &gt; Tunnels &gt; Create a Tunnel</strong>.</li>
+                    <li>Copie o token gerado ou aponte para <code>http://ci-recorder:1985</code>.</li>
+                  </ol>
+                </div>
+              </TabsContent>
+            </Tabs>
+
+            {/* Live Ping Feedback */}
+            {pingResult && (
+              <div
+                className={`p-2.5 rounded-lg border flex items-center justify-between text-xs transition-all ${
+                  pingResult.status === "ok"
+                    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                    : "border-rose-500/40 bg-rose-500/10 text-rose-300"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {pingResult.status === "ok" ? (
+                    <CheckCircle2 className="size-4 text-emerald-400" />
+                  ) : (
+                    <ShieldAlert className="size-4 text-rose-400" />
+                  )}
+                  <span>
+                    {pingResult.status === "ok"
+                      ? `Conexão bem-sucedida! ${pingResult.streamsCount} canais de vídeo online.`
+                      : `Falha na conexão: ${pingResult.message}`}
+                  </span>
+                </div>
+                {pingResult.latency !== undefined && (
+                  <Badge variant="outline" className="border-emerald-500/40 text-emerald-300 text-[10px]">
+                    {pingResult.latency}ms
+                  </Badge>
+                )}
               </div>
-              <p>
-                Como a plataforma Lovable roda sob <strong>HTTPS</strong>, navegadores modernos impedem conexões diretas a portas HTTP locais sem certificado. O túnel seguro criado pelo Docker resolve isso instantaneamente com criptografia TLS de ponta a ponta.
-              </p>
-            </div>
+            )}
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" size="sm" onClick={() => setIsGatewayModalOpen(false)}>
               Cancelar
             </Button>
@@ -1343,9 +1586,13 @@ function DvrNvrPage() {
               onClick={() => {
                 const clean = tempGatewayUrl.trim().replace(/\/$/, "");
                 setGatewayUrl(clean);
+                try {
+                  localStorage.setItem("homepulse_dvr_gateway_url_v1", clean);
+                  localStorage.setItem("homepulse_dvr_connection_mode_v1", connectionMode);
+                } catch {}
                 setIsGatewayModalOpen(false);
-                toast.success("Endereço do Gateway atualizado!", {
-                  description: clean,
+                toast.success("Conexão atualizada com sucesso!", {
+                  description: `${connectionMode === "robot" ? "Modo Robô Auto-Sync" : connectionMode === "lan" ? "Modo Rede Local" : "Modo Túnel Fixo"}: ${clean}`,
                 });
               }}
             >

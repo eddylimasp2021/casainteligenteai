@@ -58,7 +58,8 @@ docker ps --filter "name=ci-" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}
 
 echo.
 echo ==========================================================
-powershell -NoProfile -Command "$m = (docker logs ci-tunnel 2>&1 | Select-String -Pattern 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' | Select-Object -Last 1).Line; if ($m -match 'https://[a-zA-Z0-9-]+\.trycloudflare\.com') { Write-Host 'URL do Tunnel Cloudflare Ativo: ' -ForegroundColor Cyan -NoNewline; Write-Host $matches[0] -ForegroundColor Yellow } else { Write-Host 'Gateway local: http://127.0.0.1:1985' -ForegroundColor Cyan }"
+echo [Auto-Sync] Sincronizando URL do Tunel Cloudflare...
+powershell -NoProfile -Command "$m = (docker logs ci-tunnel 2>&1 | Select-String -Pattern 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' | Select-Object -Last 1).Line; if ($m -match 'https://[a-zA-Z0-9-]+\.trycloudflare\.com') { $u = $matches[0].Trim(); Write-Host 'URL do Tunnel Ativo: ' -ForegroundColor Cyan -NoNewline; Write-Host $u -ForegroundColor Yellow; Set-Clipboard -Value $u; Write-Host '[OK] Link copiado para a Area de Transferencia!' -ForegroundColor Green; Write-Host '     No navegador, basta clicar em Gateway CFTV > Colar do Robo!' -ForegroundColor DarkGray } else { Write-Host 'Gateway local: http://127.0.0.1:1985' -ForegroundColor Cyan }"
 echo ==========================================================
 echo.
 echo Tudo pronto! O streaming e as gravacoes estao ativos.
