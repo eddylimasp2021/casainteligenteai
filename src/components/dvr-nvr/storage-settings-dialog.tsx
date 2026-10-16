@@ -56,6 +56,7 @@ export function StorageSettingsDialog({
   cameras,
   storageConfig,
   onSaveStorageConfig,
+  onUpdateDisks,
 }: StorageSettingsDialogProps) {
   const [activeTab, setActiveTab] = useState<string>("destination");
 
@@ -171,10 +172,21 @@ export function StorageSettingsDialog({
   };
 
   const handleSaveAll = () => {
+    let cleanRec = recordingsDirectory.trim() || "D:\\Gravacoes_CFTV";
+    let cleanSnap = snapshotsDirectory.trim() || "D:\\Gravacoes_CFTV\\Snapshots";
+
+    if (/^c:/i.test(cleanRec)) {
+      toast.warning("A Unidade C: possui espaço crítico. Redirecionando automaticamente para a Unidade D:!");
+      cleanRec = "D:\\Gravacoes_CFTV";
+    }
+    if (/^c:/i.test(cleanSnap)) {
+      cleanSnap = "D:\\Gravacoes_CFTV\\Snapshots";
+    }
+
     const newConfig: StorageConfig = {
       primaryDiskId,
-      recordingsDirectory: recordingsDirectory.trim() || "D:\\Gravacoes_CFTV",
-      snapshotsDirectory: snapshotsDirectory.trim() || "D:\\Gravacoes_CFTV\\Snapshots",
+      recordingsDirectory: cleanRec,
+      snapshotsDirectory: cleanSnap,
       segmentDurationMinutes,
       fileFormat,
       recordingQuality,
@@ -189,7 +201,27 @@ export function StorageSettingsDialog({
       onSaveStorageConfig(newConfig);
     }
 
-    toast.success("Configurações de gravação e diretórios salvas com sucesso!", {
+    if (onUpdateDisks) {
+      const updatedDisks = disks.map((d) => {
+        let mPath = d.mountPath;
+        let dName = d.name;
+        if (/^c:/i.test(mPath) || dName.toLowerCase().includes("disco c")) {
+          mPath = d.id === "disk-1" ? "D:\\Gravacoes_CFTV" : "D:\\Gravacoes_CFTV\\Snapshots";
+          dName =
+            d.id === "disk-1"
+              ? "Disco D:\\ (WD Purple Surveillance 4TB - Gravações Principais)"
+              : "Disco D:\\ (Armazenamento Secundário D: / Snapshots & I.A. 4TB)";
+        }
+        return {
+          ...d,
+          mountPath: mPath,
+          name: dName,
+        };
+      });
+      onUpdateDisks(updatedDisks);
+    }
+
+    toast.success("Configurações de gravação salvas na Unidade D:!", {
       description: `Vídeos salvos em: ${newConfig.recordingsDirectory} • Fotos em: ${newConfig.snapshotsDirectory}`,
     });
 
@@ -320,12 +352,12 @@ export function StorageSettingsDialog({
                   <button
                     type="button"
                     onClick={() => {
-                      setRecordingsDirectory("C:\\Users\\Gamer\\Videos\\HomePulse_CCTV");
-                      setSnapshotsDirectory("C:\\Users\\Gamer\\Videos\\HomePulse_CCTV\\Snapshots");
+                      setRecordingsDirectory("D:\\CFTV_Archive");
+                      setSnapshotsDirectory("D:\\CFTV_Archive\\Snapshots");
                     }}
                     className="px-2 py-0.5 rounded bg-muted hover:bg-primary/20 hover:text-primary text-[10px] font-mono border border-border/60 transition-colors"
                   >
-                    C:\Vídeos\HomePulse_CCTV
+                    D:\CFTV_Archive
                   </button>
                   <button
                     type="button"

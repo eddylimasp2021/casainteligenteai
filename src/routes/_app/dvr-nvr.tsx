@@ -72,16 +72,33 @@ const AI_EVENTS_STORAGE_KEY = "homepulse_dvr_events_v1";
 const STORAGE_CONFIG_KEY = "homepulse_dvr_storage_config_v1";
 
 function DvrNvrPage() {
-  // Storage Configuration state (Where to save recordings and snapshots)
+  // Storage Configuration state (Where to save recordings and snapshots - strictly Drive D:)
   const [storageConfig, setStorageConfig] = useState<StorageConfig>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_CONFIG_KEY);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed: StorageConfig = JSON.parse(saved);
+        let changed = false;
+        // Strict guard: drive C has critical low space (3.6 GB), enforce Drive D:
+        if (!parsed.recordingsDirectory || /^c:/i.test(parsed.recordingsDirectory)) {
+          parsed.recordingsDirectory = "D:\\Gravacoes_CFTV";
+          changed = true;
+        }
+        if (!parsed.snapshotsDirectory || /^c:/i.test(parsed.snapshotsDirectory)) {
+          parsed.snapshotsDirectory = "D:\\Gravacoes_CFTV\\Snapshots";
+          changed = true;
+        }
+        if (changed) {
+          localStorage.setItem(STORAGE_CONFIG_KEY, JSON.stringify(parsed));
+        }
+        return parsed;
+      }
     } catch (e) {
       console.warn("Failed to parse saved storage config", e);
     }
     return INITIAL_STORAGE_CONFIG;
   });
+
   // Cameras state
   const [cameras, setCameras] = useState<IpCamera[]>(() => {
     try {
@@ -103,10 +120,19 @@ function DvrNvrPage() {
           parsed = [parsed[0], INITIAL_CAMERAS[1], ...parsed.slice(1)];
         }
 
+        // Ensure 192.168.0.198 camera is present
+        const hasCam198 = parsed.some(
+          (c) => c.ip === "192.168.0.198" || c.streamName === "cam_192_168_0_198" || c.id === "cam-real-198"
+        );
+        if (!hasCam198 && INITIAL_CAMERAS.some((c) => c.ip === "192.168.0.198")) {
+          const initial198 = INITIAL_CAMERAS.find((c) => c.ip === "192.168.0.198")!;
+          parsed = [...parsed, initial198];
+        }
+
         return parsed.map((c) => {
           if (
             (c.ip === "192.168.0.139" || (c.name && c.name.toLowerCase().includes("garagem"))) &&
-            !c.streamName
+            (!c.streamName || c.streamName === "cam-garagem")
           ) {
             return {
               ...c,
@@ -125,6 +151,14 @@ function DvrNvrPage() {
               splitLensesIntoGrid: c.splitLensesIntoGrid ?? true,
             };
           }
+          if (c.ip === "192.168.0.198" || (c.name && c.name.toLowerCase().includes("198"))) {
+            return {
+              ...c,
+              streamName: "cam_192_168_0_198",
+              gatewayHost: "localhost:1984",
+              activeProtocol: "WebRTC",
+            };
+          }
           return c;
         });
       }
@@ -134,11 +168,34 @@ function DvrNvrPage() {
     return INITIAL_CAMERAS;
   });
 
-  // Storage Disks state
+  // Storage Disks state (Strictly enforce Drive D: - eliminate any disk referencing C:)
   const [disks, setDisks] = useState<StorageDisk[]>(() => {
     try {
       const saved = localStorage.getItem(DISKS_STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        let parsed = JSON.parse(saved) as StorageDisk[];
+        let changed = false;
+        parsed = parsed.map((disk) => {
+          // If disk references drive C or has a C: mount path or is named Disco C:, migrate it to Drive D:
+          if (/^c:/i.test(disk.mountPath) || disk.name.toLowerCase().includes("disco c")) {
+            changed = true;
+            return {
+              ...disk,
+              name: "Disco D:\\ (Armazenamento Secundário D: / Snapshots & I.A. 4TB)",
+              mountPath: "D:\\Gravacoes_CFTV\\Snapshots",
+              status: "healthy",
+              isSystemDisk: false,
+              totalBytes: 4000000000000,
+              usedBytes: 1220000000000,
+            };
+          }
+          return disk;
+        });
+        if (changed) {
+          localStorage.setItem(DISKS_STORAGE_KEY, JSON.stringify(parsed));
+        }
+        return parsed;
+      }
     } catch (e) {
       console.warn("Failed to parse saved disks", e);
     }
@@ -211,6 +268,14 @@ function DvrNvrPage() {
       console.warn("Failed to save storage config", e);
     }
   }, [storageConfig]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(DISKS_STORAGE_KEY, JSON.stringify(disks));
+    } catch (e) {
+      console.warn("Failed to save disks", e);
+    }
+  }, [disks]);
 
   // Calculations
   const onlineCamerasCount = cameras.filter((c) => c.status === "online").length;
@@ -331,6 +396,16 @@ function DvrNvrPage() {
         (cam.ip === "192.168.0.240" || cam.name.toLowerCase().includes("240") ? 3 : 1);
       const shouldSplit = cam.splitLensesIntoGrid ?? (total > 1);
 
+      const effectiveStream =
+        cam.streamName ||
+        (cam.ip === "192.168.0.240" || cam.name.includes("240")
+          ? "cam_192_168_0_240"
+          : cam.ip === "192.168.0.198" || cam.name.includes("198")
+          ? "cam_192_168_0_198"
+          : cam.ip === "192.168.0.139" || cam.name.toLowerCase().includes("garagem")
+          ? "garagem_rua"
+          : cam.id);
+
       if (total > 1 && shouldSplit) {
         for (let lens = 1; lens <= total; lens++) {
           const label =
@@ -348,10 +423,14 @@ function DvrNvrPage() {
             name: `${cam.name} — ${label}`,
             selectedLens: lens,
             lensCount: total,
+            streamName: effectiveStream,
           });
         }
       } else {
-        list.push(cam);
+        list.push({
+          ...cam,
+          streamName: effectiveStream,
+        });
       }
     }
     return list;
@@ -1064,6 +1143,7 @@ function DvrNvrPage() {
         cameras={cameras}
         storageConfig={storageConfig}
         onSaveStorageConfig={setStorageConfig}
+        onUpdateDisks={setDisks}
       />
 
       {/* Multi-Lens Configuration Modal */}

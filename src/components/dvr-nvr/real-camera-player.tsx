@@ -141,7 +141,9 @@ export function RealCameraPlayer({
       width: "100%",
       height: `${totalLenses * 100}%`,
       top: `${topPercent}%`,
-      objectFit: "cover" as const,
+      objectFit: "fill" as const,
+      maxWidth: "none",
+      maxHeight: "none",
     };
   }, [totalLenses, activeLens]);
 
@@ -167,12 +169,32 @@ export function RealCameraPlayer({
   const recordedChunksRef = useRef<Blob[]>([]);
   const recordIntervalRef = useRef<number | null>(null);
 
-  // Stream identifier registered in go2rtc
-  const streamName =
-    camera.streamName ||
-    (camera.name.toLowerCase().includes("garagem") || camera.ip === "192.168.0.139"
-      ? "garagem_rua"
-      : camera.id.replace(/[^a-zA-Z0-9_-]/g, "_"));
+  // Stream identifier registered in go2rtc (robust resolution for multi-lens and IP addresses)
+  const streamName = useMemo(() => {
+    const rawId = (camera.id || "").split("__lens_")[0].trim();
+    const rawStream = (camera.streamName || "").split("__lens_")[0].trim();
+    const cleanIp = (camera.ip || "").trim();
+    const lowerName = (camera.name || "").toLowerCase();
+
+    // 1. Direct match by IP or known names
+    if (cleanIp === "192.168.0.139" || lowerName.includes("garagem") || rawId.includes("garagem")) {
+      return "garagem_rua";
+    }
+    if (cleanIp === "192.168.0.240" || lowerName.includes("240") || rawId.includes("240")) {
+      return "cam_192_168_0_240";
+    }
+    if (cleanIp === "192.168.0.198" || lowerName.includes("198") || rawId.includes("198")) {
+      return "cam_192_168_0_198";
+    }
+
+    // 2. If valid stream name was provided
+    if (rawStream && !rawStream.startsWith("cam-real-")) {
+      return rawStream.replace(/[^a-zA-Z0-9_-]/g, "_");
+    }
+
+    // 3. Fallback
+    return (rawStream || rawId || "stream").replace(/[^a-zA-Z0-9_-]/g, "_");
+  }, [camera.streamName, camera.ip, camera.name, camera.id]);
 
   // Effective gateway base URL
   const gatewayBase = (camera.gatewayHost ? `http://${camera.gatewayHost}` : gatewayUrl).replace(/\/$/, "");
@@ -349,8 +371,15 @@ export function RealCameraPlayer({
       setStreamState("negotiating");
       const offerSdp = pc.localDescription?.sdp || offer.sdp;
 
-      // Prefer H.264 transcoded stream for Chrome/Edge if source is H.265 (garagem_rua)
-      const targetStream = streamName === "garagem_rua" ? "garagem_rua_h264" : streamName;
+      // Prefer H.264 transcoded stream for Chrome/Edge if source is H.265 or needs baseline compatibility
+      const targetStream =
+        streamName === "garagem_rua"
+          ? "garagem_rua_h264"
+          : streamName === "cam_192_168_0_240"
+          ? "cam_192_168_0_240_h264"
+          : streamName === "cam_192_168_0_198"
+          ? "cam_192_168_0_198_h264"
+          : streamName;
       let targetUrl = `${gatewayBase}/api/webrtc?src=${encodeURIComponent(targetStream)}`;
 
       let response = await fetch(targetUrl, {
