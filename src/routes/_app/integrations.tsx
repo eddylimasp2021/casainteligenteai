@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  Radio, Home, Cpu, Layers, Zap, CheckCircle2, XCircle, AlertTriangle, RefreshCw, Settings2, Play
+  Radio, Home, Cpu, Layers, Zap, CheckCircle2, XCircle, AlertTriangle, RefreshCw, Settings2, Play, Sparkles, Key
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useHousehold } from "@/lib/household";
@@ -11,22 +11,24 @@ import { PageHeader, LoadingState } from "@/components/home/ui-states";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { AIProviderConfigModal } from "@/components/ai/AIProviderConfigModal";
+import { AI_PROVIDERS, loadAIConfig, AIConfig } from "@/lib/ai-provider";
 
 export const Route = createFileRoute("/_app/integrations")({
   head: () => ({
     meta: [
       { title: "Integrações IoT — Casa Inteligente AI" },
-      { name: "description", content: "Gerencie integrações com MQTT, Home Assistant, Zigbee, Matter e nós ESP32." },
+      { name: "description", content: "Gerencie integrações com MQTT, Home Assistant, Zigbee, Matter, Google Gemini e nós ESP32." },
     ],
   }),
   component: IntegrationsPage,
 });
 
 interface IntegrationCardDef {
-  key: "mqtt" | "home_assistant" | "zigbee2mqtt" | "matter" | "esp32";
+  key: "mqtt" | "home_assistant" | "zigbee2mqtt" | "matter" | "esp32" | "gemini_ai";
   name: string;
   category: string;
-  icon: typeof Radio;
+  icon: typeof Radio | typeof Sparkles;
   protocol: string;
   description: string;
   defaultPort?: number;
@@ -82,6 +84,15 @@ const INTEGRATION_DEFS: IntegrationCardDef[] = [
     description: "Dispositivos customizados de automação com confirmação real de execução física e telemetria.",
     setupGuide: "Grave o firmware oficial na pasta /iot-gateway/firmware/esp32-smart-switch com as credenciais do Wi-Fi.",
   },
+  {
+    key: "gemini_ai",
+    name: "Google Gemini & Provedores IA",
+    category: "Inteligência Artificial & LLMs",
+    icon: Sparkles,
+    protocol: "REST & Streaming API",
+    description: "Alimenta o Assistente IA (Mark-LV) com visão de câmeras, comandos de voz naturais e automações multimodais.",
+    setupGuide: "Insira sua chave de API gerada no Google AI Studio (aistudio.google.com) ou selecione OpenAI, Claude, Groq e Ollama.",
+  },
 ];
 
 function IntegrationsPage() {
@@ -89,6 +100,17 @@ function IntegrationsPage() {
   const qc = useQueryClient();
   const [testingKey, setTestingKey] = useState<string | null>(null);
   const [selectedConfig, setSelectedConfig] = useState<IntegrationCardDef | null>(null);
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [aiConfig, setAiConfig] = useState<AIConfig>(loadAIConfig);
+
+  useEffect(() => {
+    const handleConfigChange = (e: any) => {
+      if (e.detail) setAiConfig(e.detail);
+      else setAiConfig(loadAIConfig());
+    };
+    window.addEventListener("homepulse:ai-config-changed", handleConfigChange);
+    return () => window.removeEventListener("homepulse:ai-config-changed", handleConfigChange);
+  }, []);
 
   // Carregar status gravado pelo gateway nas tabelas
   const { data: dbIntegrations, isLoading } = useQuery({
@@ -122,6 +144,11 @@ function IntegrationsPage() {
   });
 
   async function handleTest(def: IntegrationCardDef) {
+    if (def.key === "gemini_ai") {
+      setIsAiModalOpen(true);
+      return;
+    }
+
     setTestingKey(def.key);
     toast.info(`Testando conectividade com ${def.name}...`);
 
@@ -150,7 +177,7 @@ function IntegrationsPage() {
     <>
       <PageHeader
         title="Integrações IoT"
-        description="Conecte seu painel web aos adaptadores de rede física: MQTT, Home Assistant, Zigbee, Matter e ESP32."
+        description="Conecte seu painel web aos adaptadores de rede física: MQTT, Home Assistant, Zigbee, Matter, Google Gemini e ESP32."
         actions={
           <Button variant="outline" size="sm" onClick={() => qc.invalidateQueries({ queryKey: ["iot-integrations"] })}>
             <RefreshCw className="size-4" /> Atualizar
@@ -170,9 +197,14 @@ function IntegrationsPage() {
                   ? (deviceCounts?.["zigbee"] ?? 0)
                   : def.key === "matter"
                     ? (deviceCounts?.["matter"] ?? 0)
-                    : (deviceCounts?.["wifi"] ?? 0);
+                    : def.key === "gemini_ai"
+                      ? (deviceCounts?.["total"] ?? Object.values(deviceCounts || {}).reduce((a, b) => a + b, 0))
+                      : (deviceCounts?.["wifi"] ?? 0);
 
-          const isConnected = dbRecord?.status === "connected" || (def.key === "mqtt" && devCount > 0);
+          const isConnected =
+            def.key === "gemini_ai"
+              ? Boolean(aiConfig.keys[aiConfig.activeProvider]?.trim()) || !AI_PROVIDERS[aiConfig.activeProvider].keyRequired
+              : dbRecord?.status === "connected" || (def.key === "mqtt" && devCount > 0);
           const isTesting = testingKey === def.key;
 
           return (
@@ -203,7 +235,7 @@ function IntegrationsPage() {
                       </>
                     ) : (
                       <>
-                        <AlertTriangle className="size-3.5" /> Aguardando Gateway
+                        <AlertTriangle className="size-3.5" /> {def.key === "gemini_ai" ? "Chave Pendente" : "Aguardando Gateway"}
                       </>
                     )}
                   </span>
@@ -217,15 +249,23 @@ function IntegrationsPage() {
                     <span className="font-medium">{def.protocol}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Dispositivos vinculados:</span>
-                    <span className="font-semibold tabular-nums">{devCount}</span>
+                    <span className="text-muted-foreground">
+                      {def.key === "gemini_ai" ? "Modelo Ativo:" : "Dispositivos vinculados:"}
+                    </span>
+                    <span className="font-semibold tabular-nums">
+                      {def.key === "gemini_ai"
+                        ? aiConfig.selectedModels[aiConfig.activeProvider] || AI_PROVIDERS[aiConfig.activeProvider].defaultModel
+                        : devCount}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Última sincronização:</span>
                     <span className="text-muted-foreground">
-                      {dbRecord?.last_sync_at
-                        ? new Date(dbRecord.last_sync_at).toLocaleString("pt-BR")
-                        : "Quando o gateway iniciar"}
+                      {def.key === "gemini_ai"
+                        ? "Tempo real"
+                        : dbRecord?.last_sync_at
+                          ? new Date(dbRecord.last_sync_at).toLocaleString("pt-BR")
+                          : "Quando o gateway iniciar"}
                     </span>
                   </div>
                 </div>
@@ -247,14 +287,20 @@ function IntegrationsPage() {
                   onClick={() => handleTest(def)}
                 >
                   {isTesting ? <RefreshCw className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
-                  Testar
+                  {def.key === "gemini_ai" ? "Testar Chave" : "Testar"}
                 </Button>
                 {canAdmin && (
                   <Button
                     size="sm"
                     variant="ghost"
                     className="gap-1.5"
-                    onClick={() => setSelectedConfig(def)}
+                    onClick={() => {
+                      if (def.key === "gemini_ai") {
+                        setIsAiModalOpen(true);
+                      } else {
+                        setSelectedConfig(def);
+                      }
+                    }}
                   >
                     <Settings2 className="size-3.5" /> Configurar
                   </Button>
@@ -305,6 +351,9 @@ function IntegrationsPage() {
           </DialogContent>
         )}
       </Dialog>
+
+      {/* Modal Universal de Chaves de IA */}
+      <AIProviderConfigModal open={isAiModalOpen} onOpenChange={setIsAiModalOpen} />
     </>
   );
 }

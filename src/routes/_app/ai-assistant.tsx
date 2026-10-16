@@ -6,7 +6,7 @@ import {
   Sparkles, Mic, MicOff, Send, Volume2, VolumeX, RefreshCw, 
   Settings2, Brain, Activity, ShieldCheck, Terminal, Layers, 
   Trash2, Plus, Zap, Home, Eye, Camera, CheckCircle2, 
-  Flame, Radio, Power, Clock, Info, Play, Pause
+  Flame, Radio, Power, Clock, Info, Play, Pause, Key, ExternalLink, Check
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useHousehold } from "@/lib/household";
@@ -18,6 +18,16 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { AIProviderConfigModal } from "@/components/ai/AIProviderConfigModal";
+import {
+  AI_PROVIDERS,
+  AIProviderId,
+  AIConfig,
+  loadAIConfig,
+  saveAIConfig,
+  generateAICompletion,
+  testAIConnection,
+} from "@/lib/ai-provider";
 
 export const Route = createFileRoute("/_app/ai-assistant")({
   head: () => ({
@@ -118,6 +128,19 @@ function AIAssistantPage() {
 
   const [newFact, setNewFact] = useState("");
   const [isMemoryModalOpen, setIsMemoryModalOpen] = useState(false);
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [aiConfig, setAiConfig] = useState<AIConfig>(loadAIConfig);
+  const [lastLatency, setLastLatency] = useState<number | null>(null);
+
+  // Sync AI config when saved anywhere
+  useEffect(() => {
+    const handleConfigChange = (e: any) => {
+      if (e.detail) setAiConfig(e.detail);
+      else setAiConfig(loadAIConfig());
+    };
+    window.addEventListener("homepulse:ai-config-changed", handleConfigChange);
+    return () => window.removeEventListener("homepulse:ai-config-changed", handleConfigChange);
+  }, []);
 
   // Chat message feed
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -341,7 +364,7 @@ function AIAssistantPage() {
     return () => cancelAnimationFrame(animId);
   }, [activeTheme, hudState]);
 
-  // ── COMMAND PROCESSOR & SMART HOME ENGINE ──
+  // ── COMMAND PROCESSOR & SMART HOME ENGINE (Mark-LV AI Provider Integration) ──
   const handleSendMessage = async (textToSend?: string) => {
     const raw = (textToSend || inputText).trim();
     if (!raw) return;
@@ -357,19 +380,85 @@ function AIAssistantPage() {
     setInputText("");
     setHudState("processing");
 
-    // Process with Local Intelligence & Smart Home Device Registry
+    const deviceList = devices.data || [];
+    const roomList = rooms.data || [];
+
+    const activeMeta = AI_PROVIDERS[aiConfig.activeProvider];
+    const hasKey = Boolean(aiConfig.keys[aiConfig.activeProvider]?.trim()) || !activeMeta.keyRequired;
+
+    // Se a IA tiver chave configurada (ex: Google Gemini), envia para inferência real com contexto residencial
+    if (hasKey) {
+      try {
+        const smartContext = {
+          devices: deviceList.map((d) => ({
+            id: d.id,
+            name: d.name,
+            is_on: Boolean(d.state?.on),
+            category: d.category,
+            room: (d as any).rooms?.name,
+          })),
+          rooms: roomList.map((r) => ({ id: r.id, name: r.name })),
+          cftvStatus: {
+            isRecording: true,
+            path: "D:\\Gravacoes_CFTV",
+            activeStreams: 3,
+          },
+          memories: memories.map((m) => ({ category: m.category, fact: m.fact })),
+        };
+
+        const recentHistory = messages.slice(-4).map((m) => ({
+          role: (m.sender === "user" ? "user" : "assistant") as "user" | "assistant",
+          content: m.text,
+        }));
+
+        const aiRes = await generateAICompletion(raw, smartContext, recentHistory);
+        setLastLatency(aiRes.latencyMs);
+
+        // Se a IA decidiu acionar ou desligar um dispositivo fisicamente
+        if (aiRes.deviceToToggle) {
+          try {
+            const targetDev = deviceList.find((d) => d.id === aiRes.deviceToToggle!.id);
+            await (supabase as any)
+              .from("devices")
+              .update({ state: { ...(targetDev?.state || {}), on: aiRes.deviceToToggle.targetState } })
+              .eq("id", aiRes.deviceToToggle.id);
+            queryClient.invalidateQueries({ queryKey: ["devices"] });
+            logAction(
+              current?.id,
+              `Mark-LV IA (${aiRes.providerUsed}): ${aiRes.deviceToToggle.name} -> ${aiRes.deviceToToggle.targetState ? "LIGADO" : "DESLIGADO"}`
+            );
+          } catch (err) {
+            console.warn("Falha ao atualizar estado no banco:", err);
+          }
+        }
+
+        const assistantMsg: ChatMessage = {
+          id: `ast-${Date.now()}`,
+          sender: "assistant",
+          text: aiRes.text,
+          timestamp: new Date().toLocaleTimeString(),
+          actionTaken: aiRes.actionTaken,
+        };
+
+        setMessages((prev) => [...prev, assistantMsg]);
+        speakResponse(aiRes.text);
+        return;
+      } catch (err: any) {
+        console.error("Falha ao invocar provedor de IA:", err);
+      }
+    }
+
+    // Fallback: Motor local caso ainda não tenha chave configurada
     setTimeout(async () => {
       const lower = raw.toLowerCase();
       let reply = "";
       let actionTaken = "";
 
-      const deviceList = devices.data || [];
-
       // 1. "Status geral" / "Como está a casa"
       if (lower.includes("status") || lower.includes("como está") || lower.includes("relatório") || lower.includes("resumo")) {
         const total = deviceList.length;
         const onlineCount = deviceList.filter((d) => d.status === "online").length;
-        reply = `Todos os sistemas operacionais, senhor. Identifiquei ${total} dispositivos cadastrados, com ${onlineCount} ativos no momento. Câmeras e gravação contínua NVR operando normalmente no Disco D.`;
+        reply = `Todos os sistemas operacionais, senhor. Identifiquei ${total} dispositivos cadastrados, com ${onlineCount} ativos no momento. Câmeras gravando continuamente no Disco D:\\Gravacoes_CFTV. Insira sua chave do Google Gemini no topo para raciocínio ilimitado.`;
         actionTaken = "Telemetria da Residência Verificada";
       }
       // 2. Ligar / Ativar dispositivos
@@ -386,8 +475,8 @@ function AIAssistantPage() {
             queryClient.invalidateQueries({ queryKey: ["devices"] });
           } catch {}
         } else {
-          reply = `Entendido, senhor. Ativando o comando solicitado nos subsistemas da residência.`;
-          actionTaken = "Ação de Iluminação Executada";
+          reply = `Comando recebido. Para que eu entenda variações complexas de nomes, configure sua chave do Google Gemini no botão "Chaves de IA".`;
+          actionTaken = "Ação de Iluminação";
         }
       }
       // 3. Desligar / Apagar
@@ -404,7 +493,7 @@ function AIAssistantPage() {
             queryClient.invalidateQueries({ queryKey: ["devices"] });
           } catch {}
         } else {
-          reply = `Comando de desligamento executado em todos os circuitos selecionados.`;
+          reply = `Comando de desligamento executado nos subsistemas selecionados.`;
           actionTaken = "Dispositivos Desligados";
         }
       }
@@ -418,13 +507,9 @@ function AIAssistantPage() {
         reply = `A temperatura interna média é de 23.5°C com umidade em 52%. O clima externo está estável e agradável.`;
         actionTaken = "Sensores de Clima Consultados";
       }
-      // 6. Quem é você / Sobre o Mark-LV
-      else if (lower.includes("quem é você") || lower.includes("jarvis") || lower.includes("mark")) {
-        reply = `Sou o Assistente Mark-LV, sua inteligência artificial local inspirada na arquitetura JARVIS. Opero com baixa latência, controle multimodal de hardware, gravação NVR autônoma e memória contínua.`;
-      }
-      // 7. Resposta inteligente geral
+      // 6. Resposta padrão orientando sobre a chave Gemini
       else {
-        reply = `Comando compreendido, senhor: "${raw}". Dados processados através da rede neural local Mark-LV. Subsistemas alinhados.`;
+        reply = `Comando compreendido: "${raw}". Para respostas avançadas com raciocínio multimodal, clique no botão "Inserir Chave Gemini / IA" no topo da página.`;
       }
 
       const assistantMsg: ChatMessage = {
@@ -432,12 +517,12 @@ function AIAssistantPage() {
         sender: "assistant",
         text: reply,
         timestamp: new Date().toLocaleTimeString(),
-        actionTaken,
+        actionTaken: actionTaken || undefined,
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
       speakResponse(reply);
-    }, 600);
+    }, 400);
   };
 
   const handleAddMemory = () => {
@@ -479,6 +564,32 @@ function AIAssistantPage() {
 
         {/* Status Badges & Controls */}
         <div className="flex flex-wrap items-center gap-2.5">
+          {/* AI Provider & API Key Button */}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setIsAiModalOpen(true)}
+            className={cn(
+              "gap-1.5 text-xs font-semibold shadow-sm transition-all border",
+              aiConfig.keys[aiConfig.activeProvider]
+                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+                : "border-primary/50 bg-primary/10 text-primary hover:bg-primary/20 animate-pulse"
+            )}
+            title="Configurar Chave do Google Gemini e Provedores de IA"
+          >
+            {aiConfig.keys[aiConfig.activeProvider] ? (
+              <>
+                <Sparkles className="size-3.5 text-emerald-400" />
+                <span>{AI_PROVIDERS[aiConfig.activeProvider].name} (Online)</span>
+              </>
+            ) : (
+              <>
+                <Key className="size-3.5 text-amber-400" />
+                <span>Inserir Chave Gemini / IA</span>
+              </>
+            )}
+          </Button>
+
           {/* Theme Selector */}
           <div className="flex items-center rounded-lg border bg-muted/40 p-0.5">
             {(Object.keys(THEMES) as ThemeKey[]).map((key) => (
@@ -518,7 +629,7 @@ function AIAssistantPage() {
 
       {/* Main Tabs Navigation */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="bg-muted/40 border">
+        <TabsList className="bg-muted/40 border flex flex-wrap h-auto p-1">
           <TabsTrigger value="hud" className="gap-2 text-xs font-semibold">
             <Zap className="size-3.5 text-cyan-400" /> HUD Holográfico
           </TabsTrigger>
@@ -530,6 +641,9 @@ function AIAssistantPage() {
           </TabsTrigger>
           <TabsTrigger value="telemetry" className="gap-2 text-xs font-semibold">
             <Activity className="size-3.5 text-emerald-400" /> Telemetria & Modelos
+          </TabsTrigger>
+          <TabsTrigger value="ai-keys" className="gap-2 text-xs font-semibold">
+            <Key className="size-3.5 text-cyan-400" /> Provedores & Chaves IA
           </TabsTrigger>
         </TabsList>
 
@@ -898,6 +1012,183 @@ function AIAssistantPage() {
             </div>
           </div>
         </TabsContent>
+
+        {/* ── TAB 5: PROVEDORES & CHAVES DE API DE IA ── */}
+        <TabsContent value="ai-keys" className="m-0 space-y-4">
+          <div className="rounded-xl border bg-card p-5 shadow-sm space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-4">
+              <div>
+                <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                  <Sparkles className="size-4 text-primary" />
+                  Provedores de Inteligência Artificial & Chave API
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Conecte sua chave do <strong>Google Gemini</strong>, OpenAI, Groq, Claude ou DeepSeek para dar inteligência profunda e voz ao Mark-LV.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="default"
+                onClick={() => setIsAiModalOpen(true)}
+                className="gap-1.5 shadow-md shrink-0"
+              >
+                <Key className="size-3.5" /> Gerenciar Todas as Chaves
+              </Button>
+            </div>
+
+            {/* Destaque do Google Gemini */}
+            <div className="rounded-xl border border-primary/30 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-primary/20 text-primary border border-primary/30">
+                    <Sparkles className="size-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-bold text-foreground">Google Gemini (Recomendado)</h4>
+                      <Badge variant="outline" className="text-[10px] font-mono bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
+                        Padrão do Sistema
+                      </Badge>
+                      {aiConfig.keys.gemini ? (
+                        <Badge variant="outline" className="text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                          ✓ Chave Inserida
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px] font-mono bg-amber-500/10 text-amber-400 border-amber-500/30">
+                          Chave Pendente
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Modelos Gemini 1.5 Flash, 2.0 Flash e 1.5 Pro com visão de câmeras e comandos de voz instantâneos.
+                    </p>
+                  </div>
+                </div>
+
+                <a
+                  href="https://aistudio.google.com/app/apikey"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-primary hover:underline flex items-center gap-1 font-semibold shrink-0"
+                >
+                  <ExternalLink className="size-3.5" /> Obter Chave Grátis no Google AI Studio
+                </a>
+              </div>
+
+              {/* Input rápido da chave Gemini */}
+              <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
+                <div className="relative w-full">
+                  <Input
+                    type="password"
+                    value={aiConfig.keys.gemini || ""}
+                    onChange={(e) => {
+                      const newKeys = { ...aiConfig.keys, gemini: e.target.value };
+                      const newCfg = { ...aiConfig, keys: newKeys, activeProvider: "gemini" as const };
+                      setAiConfig(newCfg);
+                      saveAIConfig(newCfg);
+                    }}
+                    placeholder="Cole sua chave do Gemini aqui (AIzaSy...)"
+                    className="font-mono text-xs h-10 w-full"
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={async () => {
+                    const key = aiConfig.keys.gemini;
+                    if (!key) {
+                      toast.error("Informe a chave do Gemini para testar.");
+                      return;
+                    }
+                    toast.info("Testando conexão com a API do Google Gemini...");
+                    const res = await testAIConnection("gemini", key);
+                    if (res.ok) {
+                      toast.success(res.message);
+                    } else {
+                      toast.error(res.message);
+                    }
+                  }}
+                  className="h-10 text-xs shrink-0 gap-1.5"
+                >
+                  <RefreshCw className="size-3.5" /> Testar Chave
+                </Button>
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={() => {
+                    saveAIConfig(aiConfig);
+                    toast.success("✓ Chave do Gemini salva com sucesso!");
+                  }}
+                  className="h-10 text-xs shrink-0 gap-1.5"
+                >
+                  <Check className="size-3.5" /> Salvar Chave
+                </Button>
+              </div>
+            </div>
+
+            {/* Grid dos outros provedores universais compatíveis */}
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                Outros Provedores Universais Compatíveis
+              </h4>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {[
+                  { id: "openai", name: "OpenAI", model: "GPT-4o / GPT-4o-mini", desc: "Compreensão de comandos complexos e contexto longo." },
+                  { id: "groq", name: "Groq Cloud", model: "Llama 3.3 70B", desc: "Inferência em LPU ultra-rápida abaixo de 300ms." },
+                  { id: "anthropic", name: "Anthropic Claude", model: "Claude 3.5 Sonnet", desc: "Linguagem natural empática e raciocínio refinado." },
+                  { id: "deepseek", name: "DeepSeek", model: "DeepSeek-V3 / R1", desc: "Raciocínio lógico estruturado e excelente custo-benefício." },
+                  { id: "openrouter", name: "OpenRouter", model: "Universal Hub", desc: "Acesse centenas de IAs com uma única chave de API." },
+                  { id: "ollama", name: "Ollama / Local", model: "Llama 3.2 (Offline)", desc: "100% privado na sua máquina sem sair para a nuvem." },
+                ].map((item) => {
+                  const hasItemKey = Boolean(aiConfig.keys[item.id as any]?.trim()) || item.id === "ollama";
+                  const isCurrentActive = aiConfig.activeProvider === item.id;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={cn(
+                        "rounded-xl border p-3.5 text-xs flex flex-col justify-between transition-colors",
+                        isCurrentActive ? "border-primary bg-primary/5" : "bg-muted/15 border-border/70"
+                      )}
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-foreground">{item.name}</span>
+                          {isCurrentActive && (
+                            <Badge variant="default" className="text-[9px] px-1.5 py-0 h-4">
+                              Ativo
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="font-mono text-[11px] text-muted-foreground">{item.model}</p>
+                        <p className="text-[11px] text-muted-foreground/80">{item.desc}</p>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-3 mt-2 border-t border-border/50">
+                        <span className="text-[10px] font-mono">
+                          {hasItemKey ? (
+                            <span className="text-emerald-400">● Configurado</span>
+                          ) : (
+                            <span className="text-muted-foreground">○ Sem chave</span>
+                          )}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setIsAiModalOpen(true)}
+                          className="h-7 text-[11px] px-2 text-primary hover:text-primary"
+                        >
+                          Configurar
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </TabsContent>
       </Tabs>
 
       {/* Dialog to Teach New Memory */}
@@ -932,6 +1223,9 @@ function AIAssistantPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Universal AI Provider & API Key Modal */}
+      <AIProviderConfigModal open={isAiModalOpen} onOpenChange={setIsAiModalOpen} />
     </div>
   );
 }

@@ -1,8 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { Moon, Sun, Monitor, LogOut } from "lucide-react";
+import { Moon, Sun, Monitor, LogOut, Sparkles, Key, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useTheme, type ThemeChoice } from "@/lib/theme";
@@ -13,6 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { AIProviderConfigModal } from "@/components/ai/AIProviderConfigModal";
+import { AI_PROVIDERS, loadAIConfig, AIConfig } from "@/lib/ai-provider";
 
 export const Route = createFileRoute("/_app/settings")({
   head: () => ({
@@ -37,6 +39,17 @@ function SettingsPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [aiConfig, setAiConfig] = useState<AIConfig>(loadAIConfig);
+
+  useEffect(() => {
+    const handleConfigChange = (e: any) => {
+      if (e.detail) setAiConfig(e.detail);
+      else setAiConfig(loadAIConfig());
+    };
+    window.addEventListener("homepulse:ai-config-changed", handleConfigChange);
+    return () => window.removeEventListener("homepulse:ai-config-changed", handleConfigChange);
+  }, []);
 
   async function saveHousehold(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -68,6 +81,59 @@ function SettingsPage() {
     <>
       <PageHeader title="Ajustes" />
       <div className="grid gap-6 lg:grid-cols-2">
+        {/* Inteligência Artificial & Provedores */}
+        <section className="glass rounded-2xl p-6 lg:col-span-2 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-2xl bg-primary/10 text-primary border border-primary/20">
+                <Sparkles className="size-6" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  Inteligência Artificial & Chave API
+                </h2>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Conecte sua chave do <strong>Google Gemini</strong> ou selecione OpenAI, Claude, Groq e Ollama para o Assistente IA (Mark-LV).
+                </p>
+              </div>
+            </div>
+
+            <Button onClick={() => setIsAiModalOpen(true)} className="gap-2 shrink-0 shadow-md">
+              <Key className="size-4" /> Configurar Chave Gemini / Provedores
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+            <div className="p-3.5 rounded-xl border bg-muted/20 space-y-1">
+              <span className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">Provedor Ativo</span>
+              <p className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                <span className="size-2 rounded-full bg-emerald-400" />
+                {AI_PROVIDERS[aiConfig.activeProvider].name}
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-xl border bg-muted/20 space-y-1">
+              <span className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">Status da Chave</span>
+              <p className="text-sm font-bold text-foreground font-mono">
+                {aiConfig.keys[aiConfig.activeProvider] ? (
+                  <span className="text-emerald-400 flex items-center gap-1">
+                    <Check className="size-3.5" /> Chave Configurada
+                  </span>
+                ) : (
+                  <span className="text-amber-400">Pendente de Chave</span>
+                )}
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-xl border bg-muted/20 space-y-1">
+              <span className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">Modelo em Uso</span>
+              <p className="text-sm font-bold text-foreground font-mono truncate">
+                {aiConfig.selectedModels[aiConfig.activeProvider] || AI_PROVIDERS[aiConfig.activeProvider].defaultModel}
+              </p>
+            </div>
+          </div>
+        </section>
+
         <section className="glass rounded-2xl p-6">
           <h2 className="mb-1 text-lg font-semibold">Perfil</h2>
           <p className="text-sm text-muted-foreground">{user?.email}</p>
@@ -102,6 +168,9 @@ function SettingsPage() {
           </section>
         )}
       </div>
+
+      {/* Modal de Configuração Universal de Chaves de IA */}
+      <AIProviderConfigModal open={isAiModalOpen} onOpenChange={setIsAiModalOpen} />
     </>
   );
 }
