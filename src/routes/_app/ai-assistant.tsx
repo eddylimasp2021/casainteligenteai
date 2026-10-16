@@ -6,7 +6,7 @@ import {
   Sparkles, Mic, MicOff, Send, Volume2, VolumeX, RefreshCw, 
   Settings2, Brain, Activity, ShieldCheck, Terminal, Layers, 
   Trash2, Plus, Zap, Home, Eye, Camera, CheckCircle2, 
-  Flame, Radio, Power, Clock, Info, Play, Pause, Key, ExternalLink, Check
+  Flame, Radio, Power, Clock, Info, Play, Pause, Key, ExternalLink, Check, AlertTriangle
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useHousehold } from "@/lib/household";
