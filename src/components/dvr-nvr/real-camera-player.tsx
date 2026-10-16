@@ -151,6 +151,7 @@ export function RealCameraPlayer({
   const [snapshotTimestamp, setSnapshotTimestamp] = useState<number>(Date.now());
   const [hasImageLoaded, setHasImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const snapshotFailuresRef = useRef<number>(0);
 
   // References
   const containerRef = useRef<HTMLDivElement>(null);
@@ -940,6 +941,7 @@ export function RealCameraPlayer({
           style={getMediaStyle()}
           className="transition-all duration-300 pointer-events-none"
           onLoad={() => {
+            snapshotFailuresRef.current = 0;
             setHasImageLoaded(true);
             setImageError(false);
             if (realResolution === null) {
@@ -947,7 +949,10 @@ export function RealCameraPlayer({
             }
           }}
           onError={() => {
-            setImageError(true);
+            snapshotFailuresRef.current += 1;
+            if (snapshotFailuresRef.current >= 3) {
+              setImageError(true);
+            }
           }}
         />
 

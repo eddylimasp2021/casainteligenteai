@@ -176,6 +176,9 @@ class CFTVGatewayHandler(BaseHTTPRequestHandler):
         # 5. Fallback: Reverse Proxy to go2rtc
         self.proxy_to_go2rtc("GET")
 
+    def do_HEAD(self):
+        self.proxy_to_go2rtc("HEAD")
+
     def do_POST(self):
         # Forward all POSTs (e.g. WebRTC SDP negotiation) to go2rtc
         self.proxy_to_go2rtc("POST")
