@@ -639,7 +639,7 @@ Se o usuário perguntar sobre o estado da casa, segurança ou câmeras, sintetiz
     const match = rawOutput.match(actionRegex);
     if (match) {
       try {
-        const actionObj = JSON.parse(match[1]);
+        const actionObj = JSON.parse(match[1] ?? "{}");
         if (actionObj.deviceId) {
           deviceToToggle = {
             id: actionObj.deviceId,
