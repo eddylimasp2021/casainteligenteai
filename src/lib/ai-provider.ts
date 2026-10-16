@@ -135,10 +135,15 @@ export interface AIConfig {
 const STORAGE_KEY = "homepulse_ai_universal_config";
 
 export function getDefaultAIConfig(): AIConfig {
+  const envGeminiKey =
+    (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_GEMINI_API_KEY) ||
+    (typeof import.meta !== "undefined" && (import.meta as any).env?.GEMINI_API_KEY) ||
+    "";
+
   return {
     activeProvider: "gemini",
     keys: {
-      gemini: "",
+      gemini: envGeminiKey,
       openai: "",
       groq: "",
       openrouter: "",
@@ -170,15 +175,19 @@ export function getDefaultAIConfig(): AIConfig {
 }
 
 export function loadAIConfig(): AIConfig {
-  if (typeof window === "undefined") return getDefaultAIConfig();
+  const defaults = getDefaultAIConfig();
+  if (typeof window === "undefined") return defaults;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return getDefaultAIConfig();
+    if (!raw) return defaults;
     const parsed = JSON.parse(raw);
-    const defaults = getDefaultAIConfig();
     return {
       activeProvider: parsed.activeProvider || defaults.activeProvider,
-      keys: { ...defaults.keys, ...(parsed.keys || {}) },
+      keys: {
+        ...defaults.keys,
+        ...(parsed.keys || {}),
+        gemini: parsed.keys?.gemini?.trim() || defaults.keys.gemini,
+      },
       selectedModels: { ...defaults.selectedModels, ...(parsed.selectedModels || {}) },
       customEndpoints: { ...defaults.customEndpoints, ...(parsed.customEndpoints || {}) },
       temperature: typeof parsed.temperature === "number" ? parsed.temperature : defaults.temperature,
@@ -186,7 +195,7 @@ export function loadAIConfig(): AIConfig {
     };
   } catch (err) {
     console.error("Erro ao carregar configurações de IA:", err);
-    return getDefaultAIConfig();
+    return defaults;
   }
 }
 
