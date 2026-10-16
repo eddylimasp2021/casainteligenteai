@@ -6,7 +6,7 @@ import {
   Sparkles, Mic, MicOff, Send, Volume2, VolumeX, RefreshCw, 
   Settings2, Brain, Activity, ShieldCheck, Terminal, Layers, 
   Trash2, Plus, Zap, Home, Eye, Camera, CheckCircle2, 
-  Flame, Radio, Power, Clock, Info, Play, Pause, Key, ExternalLink, Check
+  Flame, Radio, Power, Clock, Info, Play, Pause, Key, ExternalLink, Check, AlertTriangle
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useHousehold } from "@/lib/household";
@@ -393,7 +393,7 @@ function AIAssistantPage() {
           devices: deviceList.map((d) => ({
             id: d.id,
             name: d.name,
-            is_on: Boolean(d.state?.on),
+            is_on: Boolean((d.state as any)?.on),
             category: d.category,
             room: (d as any).rooms?.name,
           })),
@@ -420,11 +420,11 @@ function AIAssistantPage() {
             const targetDev = deviceList.find((d) => d.id === aiRes.deviceToToggle!.id);
             await (supabase as any)
               .from("devices")
-              .update({ state: { ...(targetDev?.state || {}), on: aiRes.deviceToToggle.targetState } })
+              .update({ state: { ...((targetDev?.state as any) || {}), on: aiRes.deviceToToggle.targetState } })
               .eq("id", aiRes.deviceToToggle.id);
             queryClient.invalidateQueries({ queryKey: ["devices"] });
             logAction(
-              current?.id,
+              current?.id ?? "",
               `Mark-LV IA (${aiRes.providerUsed}): ${aiRes.deviceToToggle.name} -> ${aiRes.deviceToToggle.targetState ? "LIGADO" : "DESLIGADO"}`
             );
           } catch (err) {
@@ -470,7 +470,7 @@ function AIAssistantPage() {
           try {
             await (supabase as any)
               .from("devices")
-              .update({ state: { on: true, ...match.state } })
+              .update({ state: { on: true, ...(match.state as any) } })
               .eq("id", match.id);
             queryClient.invalidateQueries({ queryKey: ["devices"] });
           } catch {}
@@ -488,7 +488,7 @@ function AIAssistantPage() {
           try {
             await (supabase as any)
               .from("devices")
-              .update({ state: { on: false, ...match.state } })
+              .update({ state: { on: false, ...(match.state as any) } })
               .eq("id", match.id);
             queryClient.invalidateQueries({ queryKey: ["devices"] });
           } catch {}
@@ -1160,7 +1160,7 @@ function AIAssistantPage() {
                   { id: "openrouter", name: "OpenRouter", model: "Universal Hub", desc: "Acesse centenas de IAs com uma única chave de API." },
                   { id: "ollama", name: "Ollama / Local", model: "Llama 3.2 (Offline)", desc: "100% privado na sua máquina sem sair para a nuvem." },
                 ].map((item) => {
-                  const hasItemKey = Boolean(aiConfig.keys[item.id as any]?.trim()) || item.id === "ollama";
+                  const hasItemKey = Boolean(aiConfig.keys[item.id as AIProviderId]?.trim()) || item.id === "ollama";
                   const isCurrentActive = aiConfig.activeProvider === item.id;
 
                   return (
