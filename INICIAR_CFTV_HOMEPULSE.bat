@@ -16,15 +16,35 @@ echo [i] Docker Desktop fechado. Iniciando o Docker Desktop agora...
 start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
 echo Aguarde enquanto o Docker inicializa no Windows...
 
-:WAIT_DOCKER
-timeout /t 4 /nobreak >nul
+:CHECK_ENGINE
+echo [i] Verificando se o motor Linux do Docker esta respondendo...
+set /a TRIES=0
+
+:RETRY_ENGINE
 docker version >nul 2>&1
-if "%ERRORLEVEL%"=="0" goto DOCKER_READY
-echo Aguardando motor do Docker ficar pronto...
-goto WAIT_DOCKER
+if "%ERRORLEVEL%"=="0" (
+    echo [OK] Motor do Docker esta pronto e operacional!
+    goto DOCKER_READY
+)
+
+set /a TRIES=%TRIES%+1
+if %TRIES% GEQ 10 (
+    echo.
+    echo [!] AVISO: O motor do Docker esta demorando para responder ou travou.
+    echo [i] Por favor, clique com botao direito no icone da baleia do Docker (proximo ao relogio)
+    echo     e escolha "Restart Docker Desktop", depois execute este arquivo novamente.
+    echo.
+    pause
+    exit /b 1
+)
+
+echo Aguardando inicializacao completa do motor do Docker (%TRIES%/10)...
+timeout /t 3 /nobreak >nul
+goto RETRY_ENGINE
 
 :DOCKER_RUNNING
-echo [OK] Docker Desktop ja esta aberto.
+echo [OK] Docker Desktop ja esta aberto no Windows.
+goto CHECK_ENGINE
 
 :DOCKER_READY
 echo.
