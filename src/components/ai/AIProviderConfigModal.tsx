@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
   Sparkles, Key, CheckCircle2, XCircle, ExternalLink, Loader2,
-  Cpu, Zap, Shield, Eye, EyeOff, Sliders, RefreshCw, Check
+  Cpu, Zap, Shield, Eye, EyeOff, Sliders, RefreshCw, Check, AlertTriangle
 } from "lucide-react";
 import {
   AI_PROVIDERS,
@@ -47,11 +47,13 @@ export function AIProviderConfigModal({ open, onOpenChange }: AIProviderConfigMo
   const currentModel = config.selectedModels[selectedProvider] || currentMeta.defaultModel;
 
   const handleKeyChange = (val: string) => {
+    // Limpeza automática de espaços, quebras de linha e aspas acidentais
+    const cleaned = val.trim().replace(/^Bearer\s+/i, "").replace(/^["'`]|["'`]$/g, "");
     setConfig((prev) => ({
       ...prev,
       keys: {
         ...prev.keys,
-        [selectedProvider]: val,
+        [selectedProvider]: cleaned,
       },
     }));
     setTestResult(null);
@@ -264,6 +266,37 @@ export function AIProviderConfigModal({ open, onOpenChange }: AIProviderConfigMo
                     )}
                   </Button>
                 </div>
+
+                {/* Validador visual e dicas para Google Gemini */}
+                {selectedProvider === "gemini" && (
+                  <div className="space-y-2 pt-1">
+                    {currentKey ? (
+                      currentKey.startsWith("AIzaSy") ? (
+                        <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-mono">
+                          <Check className="size-3.5" />
+                          <span>Formato de chave válido do Google AI Studio (inicia com AIzaSy, {currentKey.length} caracteres)</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 text-[11px] text-amber-400 font-medium bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
+                          <AlertTriangle className="size-3.5 shrink-0" />
+                          <span>Atenção: A chave do Gemini deve começar com &quot;AIzaSy&quot;. Verifique se você não copiou o nome do projeto ou título da chave no AI Studio.</span>
+                        </div>
+                      )
+                    ) : null}
+
+                    <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs text-blue-300 leading-relaxed space-y-1">
+                      <p className="font-semibold flex items-center gap-1.5 text-blue-400">
+                        <Sparkles className="size-3.5" />
+                        Dicas para chaves gratuitas do Google AI Studio:
+                      </p>
+                      <ul className="list-disc list-inside space-y-1 text-[11px] opacity-90 pl-1">
+                        <li><strong>Chave recém-gerada?</strong> O Google pode levar de 1 a 3 minutos para propagar e ativar a chave mundialmente. Se der erro ao testar agora, aguarde 60 segundos e tente novamente.</li>
+                        <li><strong>Modelo gratuito padrão:</strong> Mantenha selecionado <strong>gemini-1.5-flash</strong> (modelo oficial mais rápido e estável com alta cota gratuita).</li>
+                        <li><strong>Extensões do navegador:</strong> Se der erro de rede (&quot;Failed to fetch&quot;), pause bloqueadores de anúncio (uBlock, Brave Shields) nesta página.</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-2">

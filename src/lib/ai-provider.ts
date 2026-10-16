@@ -35,7 +35,7 @@ export const AI_PROVIDERS: Record<AIProviderId, AIProviderMeta> = {
     description: "Recomendado para o HomePulse AI. Executa visão de câmeras, comandos rápidos e raciocínio avançado com latência mínima.",
     badge: "Recomendado",
     defaultModel: "gemini-1.5-flash",
-    models: ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-2.5-flash"],
+    models: ["gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-1.5-pro", "gemini-2.0-flash-exp"],
     keyPlaceholder: "AIzaSy...",
     keyRequired: true,
     docUrl: "https://aistudio.google.com/app/apikey",
@@ -223,26 +223,115 @@ export async function testAIConnection(
 
   try {
     if (providerId === "gemini") {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: "Responda apenas 'Sistemas Online - Mark-LV'." }] }],
-          generationConfig: { maxOutputTokens: 25, temperature: 0.1 },
-        }),
-      });
+      let cleanKey = key.trim().replace(/^Bearer\s+/i, "").replace(/^["'`]|["'`]$/g, "").trim();
 
-      const elapsed = Math.round(performance.now() - start);
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        const msg = errJson?.error?.message || `Erro HTTP ${res.status}: ${res.statusText}`;
-        return { ok: false, latencyMs: elapsed, message: `Google Gemini: ${msg}` };
+      if (!cleanKey) {
+        return { ok: false, latencyMs: 0, message: "Informe a sua chave do Google Gemini." };
       }
 
-      const data = await res.json();
-      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "Online";
-      return { ok: true, latencyMs: elapsed, message: `✓ Google Gemini conectado com sucesso! Resposta: "${reply}"` };
+      // Validação de formato para evitar erros comuns de cópia
+      if (!cleanKey.startsWith("AIzaSy")) {
+        return {
+          ok: false,
+          latencyMs: 0,
+          message: "Atenção: A chave do Google Gemini (gratuita no Google AI Studio) sempre começa com 'AIzaSy' e tem cerca de 39 caracteres. Verifique se você copiou o código da chave e não o nome ou título dela no AI Studio.",
+        };
+      }
+
+      // Modelos para tentar em cascata caso o selecionado tenha instabilidade
+      const modelsToTry = [
+        model && model !== "gemini-2.5-flash" ? model : "gemini-1.5-flash",
+        "gemini-1.5-flash",
+        "gemini-1.5-flash-8b",
+        "gemini-1.5-pro",
+      ];
+
+      let lastError = "";
+
+      for (const m of Array.from(new Set(modelsToTry))) {
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${encodeURIComponent(cleanKey)}`;
+          const res = await fetch(url, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-goog-api-key": cleanKey,
+            },
+            body: JSON.stringify({
+              contents: [{ role: "user", parts: [{ text: "Responda apenas 'Sistemas Online - Mark-LV'." }] }],
+              generationConfig: { maxOutputTokens: 25, temperature: 0.1 },
+            }),
+          });
+
+          const elapsed = Math.round(performance.now() - start);
+
+          if (res.ok) {
+            const data = await res.json();
+            const reply = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "Online";
+            return {
+              ok: true,
+              latencyMs: elapsed,
+              message: `✓ Google Gemini conectado com sucesso no modelo '${m}'! Resposta: "${reply}"`,
+            };
+          }
+
+          const errJson = await res.json().catch(() => ({}));
+          const errMsg = errJson?.error?.message || `Erro HTTP ${res.status}`;
+          const errReason = errJson?.error?.details?.[0]?.reason || "";
+
+          // Se a chave for recém-criada, orientar sobre tempo de propagação do Google
+          if (errReason === "API_KEY_INVALID" || errMsg.toLowerCase().includes("api key not valid")) {
+            return {
+              ok: false,
+              latencyMs: elapsed,
+              message: "Chave inválida: Se você acabou de criar a chave no Google AI Studio agora há pouco, o Google costuma levar de 1 a 3 minutos para propagar a ativação nos servidores mundiais. Aguarde 1 minuto e clique em 'Testar Chave' novamente. Certifique-se também de ter copiado o código completo.",
+            };
+          }
+
+          if (errMsg.toLowerCase().includes("not been used") || errMsg.toLowerCase().includes("not enabled")) {
+            return {
+              ok: false,
+              latencyMs: elapsed,
+              message: "A API do Gemini está sendo ativada no seu projeto Google. Aguarde cerca de 1 a 2 minutos para o Google concluir a liberação e teste novamente.",
+            };
+          }
+
+          if (errMsg.toLowerCase().includes("location is not supported")) {
+            return {
+              ok: false,
+              latencyMs: elapsed,
+              message: "Região não suportada pelo Google Gemini. Caso esteja utilizando VPN ou proxy estrangeiro, desative-o.",
+            };
+          }
+
+          if (errMsg.toLowerCase().includes("quota") || errMsg.toLowerCase().includes("exhausted")) {
+            return {
+              ok: false,
+              latencyMs: elapsed,
+              message: "Limite de cota temporária por minuto atingido na conta gratuita do Google. Aguarde 10 segundos e teste novamente.",
+            };
+          }
+
+          lastError = errMsg;
+          // Se o modelo deu 404, continua o loop para testar gemini-1.5-flash
+        } catch (fetchErr: any) {
+          const fetchMsg = fetchErr?.message || "";
+          if (fetchMsg.includes("Failed to fetch") || fetchMsg.includes("NetworkError")) {
+            return {
+              ok: false,
+              latencyMs: Math.round(performance.now() - start),
+              message: "Bloqueio de rede no navegador (Failed to fetch). Extensões como uBlock Origin, Brave Shields ou antivírus costumam bloquear chamadas diretas para a API do Google. Pause o bloqueador nesta página e teste novamente.",
+            };
+          }
+          lastError = fetchMsg;
+        }
+      }
+
+      return {
+        ok: false,
+        latencyMs: Math.round(performance.now() - start),
+        message: `Google Gemini: ${lastError || "Não foi possível conectar com o modelo."}`,
+      };
     }
 
     if (providerId === "openai" || providerId === "groq" || providerId === "openrouter" || providerId === "deepseek") {
@@ -251,9 +340,11 @@ export async function testAIConnection(
       if (providerId === "openrouter") targetUrl = "https://openrouter.ai/api/v1/chat/completions";
       if (providerId === "deepseek") targetUrl = "https://api.deepseek.com/chat/completions";
 
+      const cleanKey = key.trim().replace(/^Bearer\s+/i, "").replace(/^["'`]|["'`]$/g, "").trim();
+
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${key}`,
+        Authorization: `Bearer ${cleanKey}`,
       };
       if (providerId === "openrouter") {
         headers["HTTP-Referer"] = window.location.origin;
@@ -418,7 +509,9 @@ Se o usuário perguntar sobre o estado da casa, segurança ou câmeras, sintetiz
     let rawOutput = "";
 
     if (providerId === "gemini") {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
+      const cleanKey = key.trim().replace(/^Bearer\s+/i, "").replace(/^["'`]|["'`]$/g, "").trim();
+      const targetModel = model && model !== "gemini-2.5-flash" ? model : "gemini-1.5-flash";
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${encodeURIComponent(cleanKey)}`;
       
       const contents: any[] = [];
       // Inclui histórico recente se houver
@@ -435,7 +528,10 @@ Se o usuário perguntar sobre o estado da casa, segurança ou câmeras, sintetiz
 
       const res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": cleanKey,
+        },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: systemPrompt }] },
           contents,

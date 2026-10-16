@@ -1082,7 +1082,8 @@ function AIAssistantPage() {
                     type="password"
                     value={aiConfig.keys.gemini || ""}
                     onChange={(e) => {
-                      const newKeys = { ...aiConfig.keys, gemini: e.target.value };
+                      const cleaned = e.target.value.trim().replace(/^Bearer\s+/i, "").replace(/^["'`]|["'`]$/g, "");
+                      const newKeys = { ...aiConfig.keys, gemini: cleaned };
                       const newCfg = { ...aiConfig, keys: newKeys, activeProvider: "gemini" as const };
                       setAiConfig(newCfg);
                       saveAIConfig(newCfg);
@@ -1123,6 +1124,24 @@ function AIAssistantPage() {
                 >
                   <Check className="size-3.5" /> Salvar Chave
                 </Button>
+              </div>
+
+              {/* Dicas e Validação da Chave */}
+              <div className="space-y-1.5 pt-1 text-xs">
+                {aiConfig.keys.gemini ? (
+                  aiConfig.keys.gemini.startsWith("AIzaSy") ? (
+                    <p className="text-emerald-400 font-mono text-[11px] flex items-center gap-1.5">
+                      <Check className="size-3.5" /> Chave válida do Google AI Studio (formato AIzaSy, {aiConfig.keys.gemini.length} caracteres)
+                    </p>
+                  ) : (
+                    <p className="text-amber-400 font-medium text-[11px] flex items-center gap-1.5">
+                      <AlertTriangle className="size-3.5" /> Atenção: Chaves do Google Gemini sempre começam com &quot;AIzaSy&quot;. Verifique se copiou a chave correta.
+                    </p>
+                  )
+                ) : null}
+                <p className="text-[11px] text-muted-foreground">
+                  💡 <strong>Nota:</strong> Chaves recém-criadas no Google AI Studio podem levar até 1 a 2 minutos para serem ativadas nos servidores do Google. Mantenha o modelo <strong>gemini-1.5-flash</strong> para acesso gratuito com alta disponibilidade.
+                </p>
               </div>
             </div>
 
