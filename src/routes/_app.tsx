@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { Home, LayoutGrid, Cpu, History, Settings, LogOut, Wifi, WifiOff, Check, ChevronsUpDown, Plus, Radio, Server, Cctv, Sparkles } from "lucide-react";
+import { Home, LayoutGrid, Cpu, History, Settings, LogOut, Wifi, WifiOff, Check, ChevronsUpDown, Plus, Radio, Server, Cctv, Sparkles, SlidersHorizontal } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { HouseholdProvider, useHousehold } from "@/lib/household";
@@ -17,6 +17,7 @@ const NAV = [
   { to: "/dashboard", label: "Início", icon: Home },
   { to: "/rooms", label: "Cômodos", icon: LayoutGrid },
   { to: "/devices", label: "Dispositivos", icon: Cpu },
+  { to: "/home-assistant", label: "Home Assistant", icon: SlidersHorizontal },
   { to: "/ai-assistant", label: "Assistente IA", icon: Sparkles },
   { to: "/dvr-nvr", label: "DVR / NVR", icon: Cctv },
   { to: "/integrations", label: "Integrações", icon: Radio },
@@ -98,7 +99,7 @@ function Shell() {
       </div>
 
       {/* Mobile bottom navigation */}
-      <nav aria-label="Navegação inferior" className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-9 border-t bg-background/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden">
+      <nav aria-label="Navegação inferior" className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-10 border-t bg-background/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden">
         {NAV.map(({ to, label, icon: Icon }) => (
           <Link key={to} to={to} className="flex flex-col items-center gap-1 py-2 text-[9px] text-muted-foreground text-center" activeProps={{ className: "text-primary font-semibold" }}>
             <Icon className="size-4 shrink-0" aria-hidden />

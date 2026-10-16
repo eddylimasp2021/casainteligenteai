@@ -20,6 +20,7 @@ import { Route as AppDevicesRouteImport } from './routes/_app/devices'
 import { Route as AppDvrNvrRouteImport } from './routes/_app/dvr-nvr'
 import { Route as AppGatewaysRouteImport } from './routes/_app/gateways'
 import { Route as AppHistoryRouteImport } from './routes/_app/history'
+import { Route as AppHomeAssistantRouteImport } from './routes/_app/home-assistant'
 import { Route as AppIntegrationsRouteImport } from './routes/_app/integrations'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppRoomsIndexRouteImport } from './routes/_app/rooms.index'
@@ -79,6 +80,11 @@ const AppHistoryRoute = AppHistoryRouteImport.update({
   path: '/history',
   getParentRoute: () => AppRoute,
 } as any)
+const AppHomeAssistantRoute = AppHomeAssistantRouteImport.update({
+  id: '/home-assistant',
+  path: '/home-assistant',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppIntegrationsRoute = AppIntegrationsRouteImport.update({
   id: '/integrations',
   path: '/integrations',
@@ -111,6 +117,7 @@ export interface FileRoutesByFullPath {
   '/dvr-nvr': typeof AppDvrNvrRoute
   '/gateways': typeof AppGatewaysRoute
   '/history': typeof AppHistoryRoute
+  '/home-assistant': typeof AppHomeAssistantRoute
   '/integrations': typeof AppIntegrationsRoute
   '/settings': typeof AppSettingsRoute
   '/rooms/$id': typeof AppRoomsIdRoute
@@ -127,6 +134,7 @@ export interface FileRoutesByTo {
   '/dvr-nvr': typeof AppDvrNvrRoute
   '/gateways': typeof AppGatewaysRoute
   '/history': typeof AppHistoryRoute
+  '/home-assistant': typeof AppHomeAssistantRoute
   '/integrations': typeof AppIntegrationsRoute
   '/settings': typeof AppSettingsRoute
   '/rooms/$id': typeof AppRoomsIdRoute
@@ -145,6 +153,7 @@ export interface FileRoutesById {
   '/_app/dvr-nvr': typeof AppDvrNvrRoute
   '/_app/gateways': typeof AppGatewaysRoute
   '/_app/history': typeof AppHistoryRoute
+  '/_app/home-assistant': typeof AppHomeAssistantRoute
   '/_app/integrations': typeof AppIntegrationsRoute
   '/_app/settings': typeof AppSettingsRoute
   '/_app/rooms/$id': typeof AppRoomsIdRoute
@@ -163,6 +172,7 @@ export interface FileRouteTypes {
     | '/dvr-nvr'
     | '/gateways'
     | '/history'
+    | '/home-assistant'
     | '/integrations'
     | '/settings'
     | '/rooms/$id'
@@ -179,6 +189,7 @@ export interface FileRouteTypes {
     | '/dvr-nvr'
     | '/gateways'
     | '/history'
+    | '/home-assistant'
     | '/integrations'
     | '/settings'
     | '/rooms/$id'
@@ -196,6 +207,7 @@ export interface FileRouteTypes {
     | '/_app/dvr-nvr'
     | '/_app/gateways'
     | '/_app/history'
+    | '/_app/home-assistant'
     | '/_app/integrations'
     | '/_app/settings'
     | '/_app/rooms/$id'
@@ -289,6 +301,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppHistoryRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/home-assistant': {
+      id: '/_app/home-assistant'
+      path: '/home-assistant'
+      fullPath: '/home-assistant'
+      preLoaderRoute: typeof AppHomeAssistantRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/integrations': {
       id: '/_app/integrations'
       path: '/integrations'
@@ -327,6 +346,7 @@ interface AppRouteChildren {
   AppDvrNvrRoute: typeof AppDvrNvrRoute
   AppGatewaysRoute: typeof AppGatewaysRoute
   AppHistoryRoute: typeof AppHistoryRoute
+  AppHomeAssistantRoute: typeof AppHomeAssistantRoute
   AppIntegrationsRoute: typeof AppIntegrationsRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppRoomsIdRoute: typeof AppRoomsIdRoute
@@ -340,6 +360,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppDvrNvrRoute: AppDvrNvrRoute,
   AppGatewaysRoute: AppGatewaysRoute,
   AppHistoryRoute: AppHistoryRoute,
+  AppHomeAssistantRoute: AppHomeAssistantRoute,
   AppIntegrationsRoute: AppIntegrationsRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppRoomsIdRoute: AppRoomsIdRoute,
