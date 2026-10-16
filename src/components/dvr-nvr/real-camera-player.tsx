@@ -17,6 +17,7 @@ import {
   Check,
   Zap,
   Image as ImageIcon,
+  Circle,
 } from "lucide-react";
 import type { IpCamera } from "@/types/dvr-nvr";
 import { Button } from "@/components/ui/button";
@@ -69,6 +70,7 @@ export function RealCameraPlayer({
   const [isMuted, setIsMuted] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
   const [showDiagnostic, setShowDiagnostic] = useState(false);
   const [copiedCommand, setCopiedCommand] = useState(false);
 
@@ -84,6 +86,9 @@ export function RealCameraPlayer({
   const pingIntervalRef = useRef<number | null>(null);
   const frameTimeoutRef = useRef<number | null>(null);
   const snapshotIntervalRef = useRef<number | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const recordIntervalRef = useRef<number | null>(null);
 
   // Stream identifier registered in go2rtc
   const streamName =
@@ -122,6 +127,15 @@ export function RealCameraPlayer({
     if (snapshotIntervalRef.current) {
       clearInterval(snapshotIntervalRef.current);
       snapshotIntervalRef.current = null;
+    }
+    if (recordIntervalRef.current) {
+      clearInterval(recordIntervalRef.current);
+      recordIntervalRef.current = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {}
     }
 
     if (peerConnectionRef.current) {
@@ -440,6 +454,106 @@ export function RealCameraPlayer({
     }
   };
 
+  // Manual Video Recording (REC)
+  const handleStartRecording = useCallback(() => {
+    try {
+      const video = videoRef.current;
+      let stream: MediaStream | null = null;
+      if (video && (video as any).captureStream) {
+        stream = (video as any).captureStream(30);
+      } else if (video && video.srcObject instanceof MediaStream) {
+        stream = video.srcObject;
+      }
+
+      if (stream && typeof MediaRecorder !== "undefined") {
+        const mimeType = MediaRecorder.isTypeSupported("video/mp4;codecs=avc1")
+          ? "video/mp4;codecs=avc1"
+          : MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
+          ? "video/webm;codecs=vp9"
+          : MediaRecorder.isTypeSupported("video/webm;codecs=vp8")
+          ? "video/webm;codecs=vp8"
+          : MediaRecorder.isTypeSupported("video/webm")
+          ? "video/webm"
+          : "";
+
+        const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+        recordedChunksRef.current = [];
+
+        recorder.ondataavailable = (event) => {
+          if (event.data && event.data.size > 0) {
+            recordedChunksRef.current.push(event.data);
+          }
+        };
+
+        recorder.onstop = () => {
+          const actualMime = recorder.mimeType || "video/mp4";
+          const blob = new Blob(recordedChunksRef.current, { type: actualMime });
+          const isWebm = actualMime.includes("webm");
+          const ext = isWebm ? "webm" : "mp4";
+          const now = new Date();
+          const pad = (n: number) => n.toString().padStart(2, "0");
+          const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+          const timeStr = `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+          const safeName = camera.name.replace(/[^a-zA-Z0-9_-]/g, "_");
+          const filename = `Gravacao_${safeName}_${dateStr}_${timeStr}.${ext}`;
+
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = filename;
+          link.click();
+          URL.revokeObjectURL(url);
+
+          toast.success(`Gravação salva: ${filename}`, {
+            description: "Vídeo salvo no diretório de gravações configurado.",
+          });
+        };
+
+        recorder.start(1000);
+        mediaRecorderRef.current = recorder;
+        setIsRecording(true);
+        setRecordSeconds(0);
+
+        recordIntervalRef.current = window.setInterval(() => {
+          setRecordSeconds((s) => s + 1);
+        }, 1000);
+
+        toast.info(`Gravação iniciada: ${camera.name}`, {
+          description: "Clique em Parar REC para salvar o arquivo de vídeo.",
+        });
+      } else {
+        // Fallback to progressive download via go2rtc HTTP MP4 API
+        const now = new Date();
+        const pad = (n: number) => n.toString().padStart(2, "0");
+        const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+        const timeStr = `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+        const filename = `gravacao_${streamName}_${dateStr}_${timeStr}.mp4`;
+        const mp4Url = `${gatewayBase}/api/stream.mp4?src=${encodeURIComponent(streamName)}&duration=60&filename=${filename}`;
+        const link = document.createElement("a");
+        link.href = mp4Url;
+        link.download = filename;
+        link.target = "_blank";
+        link.click();
+        toast.info("Iniciando download do stream MP4 direto do gateway...");
+      }
+    } catch (err: any) {
+      toast.error(`Erro ao iniciar gravação: ${err.message || err}`);
+    }
+  }, [camera.name, gatewayBase, streamName]);
+
+  const handleStopRecording = useCallback(() => {
+    if (recordIntervalRef.current) {
+      clearInterval(recordIntervalRef.current);
+      recordIntervalRef.current = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {}
+    }
+    setIsRecording(false);
+  }, []);
+
   // Auto-connect on mount or protocol change
   useEffect(() => {
     handleConnect();
@@ -590,8 +704,9 @@ export function RealCameraPlayer({
               {camera.roomName}
             </Badge>
             {isRecording && (
-              <span className="flex items-center gap-1 font-semibold text-rose-500 animate-pulse">
-                <span className="size-2 rounded-full bg-rose-500" /> REC
+              <span className="flex items-center gap-1.5 font-bold text-rose-400 bg-rose-500/20 border border-rose-500/40 px-2 py-0.5 rounded text-[10px] animate-pulse">
+                <span className="size-2 rounded-full bg-rose-500 animate-ping" />
+                REC {Math.floor(recordSeconds / 60).toString().padStart(2, "0")}:{(recordSeconds % 60).toString().padStart(2, "0")}
               </span>
             )}
           </div>
@@ -738,6 +853,32 @@ export function RealCameraPlayer({
               title="Capturar Foto Instantânea do Vídeo"
             >
               <Camera className="size-3.5" />
+            </Button>
+
+            {/* Record (REC) Button */}
+            <Button
+              size="sm"
+              variant="ghost"
+              className={`size-7 p-0 ${
+                isRecording
+                  ? "bg-rose-500/30 text-rose-400 hover:bg-rose-500/40 animate-pulse"
+                  : "text-white hover:bg-white/20 hover:text-rose-400"
+              }`}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isRecording) {
+                  handleStopRecording();
+                } else {
+                  handleStartRecording();
+                }
+              }}
+              title={isRecording ? "Parar Gravação e Salvar Arquivo" : "Gravar Este Canal (REC)"}
+            >
+              {isRecording ? (
+                <Square className="size-3.5 fill-rose-500 text-rose-500" />
+              ) : (
+                <Circle className="size-3.5 fill-rose-500 text-rose-500" />
+              )}
             </Button>
 
             {/* Audio Mute/Unmute */}

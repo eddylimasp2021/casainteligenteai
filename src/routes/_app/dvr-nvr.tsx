@@ -20,6 +20,11 @@ import {
   CheckCircle2,
   Layers,
   Sparkles,
+  FolderOpen,
+  Film,
+  Camera as CameraIcon,
+  Copy,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +34,8 @@ import {
   NvrRecording,
   AiSecurityEvent,
   StorageDisk,
+  StorageConfig,
+  INITIAL_STORAGE_CONFIG,
   INITIAL_CAMERAS,
   INITIAL_DISKS,
   INITIAL_AI_EVENTS,
@@ -61,8 +68,19 @@ type GridMode = "1x1" | "2x2" | "3x3" | "1+5";
 const CAMERAS_STORAGE_KEY = "homepulse_dvr_cameras_v1";
 const DISKS_STORAGE_KEY = "homepulse_dvr_disks_v1";
 const AI_EVENTS_STORAGE_KEY = "homepulse_dvr_events_v1";
+const STORAGE_CONFIG_KEY = "homepulse_dvr_storage_config_v1";
 
 function DvrNvrPage() {
+  // Storage Configuration state (Where to save recordings and snapshots)
+  const [storageConfig, setStorageConfig] = useState<StorageConfig>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_CONFIG_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.warn("Failed to parse saved storage config", e);
+    }
+    return INITIAL_STORAGE_CONFIG;
+  });
   // Cameras state
   const [cameras, setCameras] = useState<IpCamera[]>(() => {
     try {
@@ -157,6 +175,14 @@ function DvrNvrPage() {
       console.warn("Failed to save AI events", e);
     }
   }, [aiEvents]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_CONFIG_KEY, JSON.stringify(storageConfig));
+    } catch (e) {
+      console.warn("Failed to save storage config", e);
+    }
+  }, [storageConfig]);
 
   // Calculations
   const onlineCamerasCount = cameras.filter((c) => c.status === "online").length;
@@ -768,9 +794,9 @@ function DvrNvrPage() {
         <TabsContent value="storage" className="m-0 space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold">Armazenamento & Discos NVR</h2>
+              <h2 className="text-lg font-semibold">Armazenamento & Destino de Gravação NVR</h2>
               <p className="text-xs text-muted-foreground">
-                Capacidade de armazenamento, integridade S.M.A.R.T. e políticas de retenção
+                Diretório de gravação de imagens e vídeos, capacidade dos discos e integridade S.M.A.R.T.
               </p>
             </div>
             <Button
@@ -778,8 +804,99 @@ function DvrNvrPage() {
               size="sm"
               className="gap-1.5"
             >
-              <SlidersHorizontal className="size-4" /> Configurar Retenção
+              <SlidersHorizontal className="size-4" /> Configurar Destino & Retenção
             </Button>
+          </div>
+
+          {/* Active Recording & Snapshot Destination Card */}
+          <div className="rounded-2xl border border-primary/30 bg-gradient-to-r from-primary/10 via-card to-card p-5 space-y-4 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/20">
+                  <FolderOpen className="size-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-base text-foreground">
+                      Destino Ativo das Gravações & Fotos
+                    </h3>
+                    <Badge className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px]">
+                      Armazenamento Pronto
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Onde o NVR armazena vídeos contínuos, detecções por I.A. e snapshots de fotos
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => setIsStorageSettingsOpen(true)}
+                  className="gap-1.5 text-xs shadow"
+                >
+                  <SlidersHorizontal className="size-3.5" />
+                  Alterar Local de Gravação
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+              <div className="p-3.5 rounded-xl bg-background/80 border border-border/60 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                    <Film className="size-3.5 text-primary" /> Pasta de Gravação de Vídeos das Câmeras:
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(storageConfig.recordingsDirectory);
+                      toast.success("Caminho de gravação copiado!");
+                    }}
+                    className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground gap-1"
+                  >
+                    <Copy className="size-3" /> Copiar
+                  </Button>
+                </div>
+                <div className="font-mono text-xs font-bold text-primary truncate select-all bg-muted/50 p-2 rounded border border-border/40">
+                  {storageConfig.recordingsDirectory}
+                </div>
+                <div className="text-[11px] text-muted-foreground flex items-center gap-3 pt-0.5">
+                  <span>Formato: <strong className="text-foreground uppercase">{storageConfig.fileFormat}</strong></span>
+                  <span>Segmento: <strong className="text-foreground">{storageConfig.segmentDurationMinutes} min</strong></span>
+                  <span>Qualidade: <strong className="text-foreground">{storageConfig.recordingQuality === "main" ? "Full HD" : "Sub (Fluido)"}</strong></span>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-background/80 border border-border/60 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                    <CameraIcon className="size-3.5 text-primary" /> Pasta de Fotos (Snapshots):
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(storageConfig.snapshotsDirectory);
+                      toast.success("Caminho de snapshots copiado!");
+                    }}
+                    className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground gap-1"
+                  >
+                    <Copy className="size-3" /> Copiar
+                  </Button>
+                </div>
+                <div className="font-mono text-xs font-bold text-primary truncate select-all bg-muted/50 p-2 rounded border border-border/40">
+                  {storageConfig.snapshotsDirectory}
+                </div>
+                <div className="text-[11px] text-muted-foreground flex items-center gap-3 pt-0.5">
+                  <span>Estrutura: <strong className="text-foreground">{storageConfig.folderStructure === "date_camera" ? "/[Data]/[Câmera]/" : "/[Câmera]/[Data]/"}</strong></span>
+                  <span>Retenção: <strong className="text-foreground">{storageConfig.retentionDays} dias</strong></span>
+                  <span className="text-emerald-400">● 24/7 Loop FIFO</span>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -852,6 +969,8 @@ function DvrNvrPage() {
         onOpenChange={setIsStorageSettingsOpen}
         disks={disks}
         cameras={cameras}
+        storageConfig={storageConfig}
+        onSaveStorageConfig={setStorageConfig}
       />
     </div>
   );

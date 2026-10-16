@@ -87,6 +87,7 @@ services:
       - "8555:8555/udp"   # WebRTC UDP
     volumes:
       - ./go2rtc.yaml:/config/go2rtc.yaml:rw
+      - ./recordings:/recordings:rw
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:1984/api || exit 1"]
       interval: 15s

@@ -81,7 +81,36 @@ export interface StorageDisk {
   temperatureCelsius: number;
   smartStatus: "PASSED" | "WARNING" | "FAILING";
   retentionDays: number;
+  mountPath?: string;
 }
+
+export interface StorageConfig {
+  primaryDiskId: string;
+  recordingsDirectory: string;
+  snapshotsDirectory: string;
+  segmentDurationMinutes: number;
+  fileFormat: "mp4" | "mkv";
+  retentionDays: number;
+  overwriteMode: "loop" | "stop";
+  recordingQuality: "main" | "sub";
+  autoRecordOnMotion: boolean;
+  autoRecordContinuous: boolean;
+  folderStructure: "date_camera" | "camera_date";
+}
+
+export const INITIAL_STORAGE_CONFIG: StorageConfig = {
+  primaryDiskId: "disk-1",
+  recordingsDirectory: "D:\\Gravacoes_CFTV",
+  snapshotsDirectory: "D:\\Gravacoes_CFTV\\Snapshots",
+  segmentDurationMinutes: 15,
+  fileFormat: "mp4",
+  retentionDays: 30,
+  overwriteMode: "loop",
+  recordingQuality: "main",
+  autoRecordOnMotion: true,
+  autoRecordContinuous: true,
+  folderStructure: "date_camera",
+};
 
 export const INITIAL_CAMERAS: IpCamera[] = [
   {
@@ -267,7 +296,7 @@ export const INITIAL_CAMERAS: IpCamera[] = [
 export const INITIAL_DISKS: StorageDisk[] = [
   {
     id: "disk-1",
-    name: "WD Purple Surveillance 4TB (SATA 1)",
+    name: "Disco D:\\ (WD Purple Surveillance 4TB)",
     type: "SATA",
     totalBytes: 4_000_000_000_000,
     usedBytes: 2_450_000_000_000,
@@ -275,17 +304,19 @@ export const INITIAL_DISKS: StorageDisk[] = [
     temperatureCelsius: 37,
     smartStatus: "PASSED",
     retentionDays: 30,
+    mountPath: "D:\\Gravacoes_CFTV",
   },
   {
     id: "disk-2",
-    name: "Seagate SkyHawk AI 4TB (SATA 2)",
-    type: "SATA",
+    name: "Disco C:\\ (SSD NVMe Principal / Vídeos 4TB)",
+    type: "NVMe",
     totalBytes: 4_000_000_000_000,
     usedBytes: 1_820_000_000_000,
     status: "healthy",
     temperatureCelsius: 38,
     smartStatus: "PASSED",
     retentionDays: 30,
+    mountPath: "C:\\Users\\Gamer\\Videos\\HomePulse_CCTV",
   },
 ];
 
