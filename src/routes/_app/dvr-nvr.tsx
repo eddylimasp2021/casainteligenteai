@@ -122,7 +122,7 @@ function DvrNvrPage() {
           (c) => c.ip === "192.168.0.139" || c.streamName === "garagem_rua"
         );
         if (!hasRealCam && INITIAL_CAMERAS.length > 0) {
-          parsed = [INITIAL_CAMERAS[0], ...parsed];
+          parsed = [INITIAL_CAMERAS[0]!, ...parsed];
         }
 
         // Ensure 192.168.0.240 triple camera is present
@@ -130,7 +130,7 @@ function DvrNvrPage() {
           (c) => c.ip === "192.168.0.240" || c.streamName === "cam_192_168_0_240" || c.id === "cam-real-240"
         );
         if (!hasCam240 && INITIAL_CAMERAS.length > 1) {
-          parsed = [parsed[0], INITIAL_CAMERAS[1], ...parsed.slice(1)];
+          parsed = [parsed[0]!, INITIAL_CAMERAS[1]!, ...parsed.slice(1)];
         }
 
         // Ensure 192.168.0.198 camera is present
@@ -187,7 +187,7 @@ function DvrNvrPage() {
         let changed = false;
         parsed = parsed.map((disk) => {
           // If disk references drive C or has a C: mount path or is named Disco C:, migrate it to Drive D:
-          if (/^c:/i.test(disk.mountPath) || disk.name.toLowerCase().includes("disco c")) {
+          if (/^c:/i.test(disk.mountPath ?? "") || disk.name.toLowerCase().includes("disco c")) {
             changed = true;
             return {
               ...disk,
