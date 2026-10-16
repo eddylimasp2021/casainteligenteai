@@ -228,17 +228,20 @@ function DvrNvrPage() {
 
   // View Engine: "real" (WebRTC via Docker Media Gateway go2rtc) vs "simulation" (AI Canvas)
   const [viewEngine, setViewEngine] = useState<"real" | "simulation">("real");
+  const CURRENT_CLOUDFLARE_TUNNEL = "https://cool-weekends-participation-florists.trycloudflare.com";
   const [gatewayUrl, setGatewayUrl] = useState<string>(() => {
     try {
       const saved = localStorage.getItem("homepulse_dvr_gateway_url_v1");
-      if (saved && saved.trim() && !saved.includes("dreams-metal")) {
+      if (saved && saved.trim()) {
+        if (saved.includes("trycloudflare.com") && saved.trim() !== CURRENT_CLOUDFLARE_TUNNEL) {
+          localStorage.setItem("homepulse_dvr_gateway_url_v1", CURRENT_CLOUDFLARE_TUNNEL);
+          return CURRENT_CLOUDFLARE_TUNNEL;
+        }
         return saved.trim();
       }
     } catch {}
     const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
-    return isHttps
-      ? "https://voted-regulated-loads-orchestra.trycloudflare.com"
-      : "http://127.0.0.1:1985";
+    return isHttps ? CURRENT_CLOUDFLARE_TUNNEL : "http://127.0.0.1:1985";
   });
   const [isGatewayModalOpen, setIsGatewayModalOpen] = useState(false);
   const [tempGatewayUrl, setTempGatewayUrl] = useState(gatewayUrl);
@@ -1244,7 +1247,7 @@ function DvrNvrPage() {
               <div className="grid grid-cols-1 gap-2">
                 <button
                   type="button"
-                  onClick={() => setTempGatewayUrl("https://voted-regulated-loads-orchestra.trycloudflare.com")}
+                  onClick={() => setTempGatewayUrl("https://cool-weekends-participation-florists.trycloudflare.com")}
                   className="flex items-start gap-2 p-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-left transition-colors"
                 >
                   <Lock className="size-4 text-emerald-400 shrink-0 mt-0.5" />
@@ -1253,7 +1256,7 @@ function DvrNvrPage() {
                       Túnel HTTPS Seguro Cloudflare <Badge className="bg-emerald-500/20 text-emerald-300 text-[9px] py-0">Recomendado para Lovable</Badge>
                     </div>
                     <div className="font-mono text-[10px] text-emerald-300/80 truncate">
-                      https://voted-regulated-loads-orchestra.trycloudflare.com
+                      https://cool-weekends-participation-florists.trycloudflare.com
                     </div>
                     <div className="text-[10px] text-muted-foreground mt-0.5">
                       Sem bloqueio de Mixed Content • Suporta Vídeo Ao Vivo e Gravações NVR
