@@ -196,8 +196,22 @@ export function RealCameraPlayer({
     return (rawStream || rawId || "stream").replace(/[^a-zA-Z0-9_-]/g, "_");
   }, [camera.streamName, camera.ip, camera.name, camera.id]);
 
-  // Effective gateway base URL
-  const gatewayBase = (camera.gatewayHost ? `http://${camera.gatewayHost}` : gatewayUrl).replace(/\/$/, "");
+  // Effective gateway base URL (prioritizes dynamic gatewayUrl, strips localhost to prevent IPv6 resets, handles https)
+  const gatewayBase = useMemo(() => {
+    let raw = camera.gatewayHost;
+    if (!raw || raw === "localhost:1984" || raw === "127.0.0.1:1984") {
+      raw = gatewayUrl;
+    }
+    raw = (raw || "http://127.0.0.1:1984").trim().replace(/\/$/, "");
+
+    if (!raw.startsWith("http://") && !raw.startsWith("https://")) {
+      const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
+      raw = `${isHttps ? "https" : "http"}://${raw}`;
+    }
+
+    raw = raw.replace("://localhost:", "://127.0.0.1:");
+    return raw;
+  }, [camera.gatewayHost, gatewayUrl]);
 
   // Update OSD clock
   useEffect(() => {
@@ -973,17 +987,23 @@ export function RealCameraPlayer({
           </div>
         )}
 
-        {/* State: Error / Inaccessible (Only shown when neither WebRTC nor snapshot image is available) */}
-        {streamState === "error" && (!hasImageLoaded || imageError) && (
+        {/* State: Error / Inaccessible (Shown when video frames or snapshot fails, or Mixed Content detected) */}
+        {((streamState === "error" && (!hasImageLoaded || imageError)) || (protocol === "Snapshot" && imageError)) && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/92 text-white space-y-3 z-10 p-4 text-center">
-            <div className="size-10 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center">
+            <div className="size-10 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center">
               <AlertTriangle className="size-5" />
             </div>
 
             <div className="max-w-md space-y-1">
-              <h4 className="font-bold text-sm text-rose-300">Falha na Exibição do Vídeo</h4>
+              <h4 className="font-bold text-sm text-amber-300">
+                {typeof window !== "undefined" && window.location.protocol === "https:" && gatewayBase.startsWith("http:")
+                  ? "Bloqueio de Conteúdo Misto (HTTPS vs HTTP Local)"
+                  : "Falha na Exibição do Vídeo"}
+              </h4>
               <p className="text-xs text-neutral-300 line-clamp-3">
-                {errorMessage || "O stream não pôde ser reproduzido no navegador."}
+                {typeof window !== "undefined" && window.location.protocol === "https:" && gatewayBase.startsWith("http:")
+                  ? "O navegador em HTTPS bloqueou a conexão HTTP local. Conecte pelo Túnel HTTPS seguro ou ative 'Conteúdo Inseguro' no Chrome para este site."
+                  : errorMessage || "O stream não pôde ser reproduzido no navegador. Verifique a URL do Gateway ou as credenciais RTSP."}
               </p>
             </div>
 
@@ -994,20 +1014,10 @@ export function RealCameraPlayer({
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => {
-                  setProtocol("Snapshot");
-                }}
-                className="h-7 text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-500/40 gap-1.5"
-              >
-                <ImageIcon className="size-3.5" /> Alternar para Snapshot JPEG
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
                 onClick={() => setShowDiagnostic(true)}
-                className="h-7 text-xs bg-white/10 hover:bg-white/20 text-white border-white/20 gap-1.5"
+                className="h-7 text-xs bg-primary/20 hover:bg-primary/30 text-primary border-primary/40 gap-1.5"
               >
-                <Terminal className="size-3.5" /> Ver Diagnóstico
+                <Terminal className="size-3.5" /> Diagnóstico & Gateway HTTPS
               </Button>
             </div>
           </div>

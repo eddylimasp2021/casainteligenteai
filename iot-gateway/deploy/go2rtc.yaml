@@ -55,7 +55,7 @@ streams:
 
   # Câmera 192.168.0.240 (Câmera Tripla Multi-Lente 3 em 1 - 1920x3240 Full HD)
   cam_192_168_0_240:
-    - rtsp://admin:ambar786@192.168.0.240:554/onvif1
+    - rtsp://admin:ambar786%40@192.168.0.240:554/onvif1#input=rtsp/udp
 
   # Câmera 192.168.0.240 H.264 (Transcodificado para navegadores sem suporte a HEVC)
   cam_192_168_0_240_h264:

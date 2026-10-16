@@ -25,10 +25,23 @@ import {
   Camera as CameraIcon,
   Copy,
   Check,
+  Server,
+  Globe,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   IpCamera,
   NvrRecording,
@@ -137,7 +150,6 @@ function DvrNvrPage() {
             return {
               ...c,
               streamName: "garagem_rua",
-              gatewayHost: "localhost:1984",
               activeProtocol: "WebRTC",
             };
           }
@@ -145,7 +157,6 @@ function DvrNvrPage() {
             return {
               ...c,
               streamName: "cam_192_168_0_240",
-              gatewayHost: "localhost:1984",
               activeProtocol: "WebRTC",
               lensCount: c.lensCount ?? 3,
               splitLensesIntoGrid: c.splitLensesIntoGrid ?? true,
@@ -155,7 +166,6 @@ function DvrNvrPage() {
             return {
               ...c,
               streamName: "cam_192_168_0_198",
-              gatewayHost: "localhost:1984",
               activeProtocol: "WebRTC",
             };
           }
@@ -218,7 +228,24 @@ function DvrNvrPage() {
 
   // View Engine: "real" (WebRTC via Docker Media Gateway go2rtc) vs "simulation" (AI Canvas)
   const [viewEngine, setViewEngine] = useState<"real" | "simulation">("real");
-  const [gatewayUrl, setGatewayUrl] = useState<string>("http://localhost:1984");
+  const [gatewayUrl, setGatewayUrl] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem("homepulse_dvr_gateway_url_v1");
+      if (saved && saved.trim()) return saved.trim();
+    } catch {}
+    const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
+    return isHttps
+      ? "https://dreams-metal-mitchell-league.trycloudflare.com"
+      : "http://127.0.0.1:1984";
+  });
+  const [isGatewayModalOpen, setIsGatewayModalOpen] = useState(false);
+  const [tempGatewayUrl, setTempGatewayUrl] = useState(gatewayUrl);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("homepulse_dvr_gateway_url_v1", gatewayUrl);
+    } catch {}
+  }, [gatewayUrl]);
 
   // Grid layout
   const [gridMode, setGridMode] = useState<GridMode>("2x2");
@@ -627,6 +654,26 @@ function DvrNvrPage() {
                   Simulação I.A.
                 </Button>
               </div>
+
+              {/* Gateway CFTV Connection Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setTempGatewayUrl(gatewayUrl);
+                  setIsGatewayModalOpen(true);
+                }}
+                className="h-7 px-2.5 text-xs font-medium gap-1.5 border-border/60 hover:bg-muted text-muted-foreground hover:text-foreground"
+                title="Configurar endereço do Gateway CFTV / Túnel HTTPS"
+              >
+                <Server className="size-3 text-primary" />
+                <span className="hidden sm:inline">Gateway CFTV</span>
+                <span
+                  className={`size-2 rounded-full ${
+                    gatewayUrl.startsWith("https://") ? "bg-emerald-400" : "bg-amber-400"
+                  }`}
+                />
+              </Button>
 
               <div className="flex items-center rounded-lg border border-border/60 bg-card/60 p-0.5">
                 <Button
@@ -1156,6 +1203,108 @@ function DvrNvrPage() {
           localStorage.setItem(CAMERAS_STORAGE_KEY, JSON.stringify(updated));
         }}
       />
+
+      {/* Gateway CFTV Configuration Modal */}
+      <Dialog open={isGatewayModalOpen} onOpenChange={setIsGatewayModalOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                <Server className="size-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg">Gateway de Mídia CFTV (go2rtc)</DialogTitle>
+                <DialogDescription className="text-xs">
+                  Conecte o frontend Lovable ao gateway de streaming WebRTC das suas câmeras
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-xs">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">Endereço do Gateway (URL):</Label>
+              <Input
+                value={tempGatewayUrl}
+                onChange={(e) => setTempGatewayUrl(e.target.value)}
+                placeholder="Ex: https://...trycloudflare.com ou http://127.0.0.1:1984"
+                className="font-mono text-xs"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-semibold text-muted-foreground">Preenchimento Rápido:</span>
+              <div className="grid grid-cols-1 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTempGatewayUrl("https://dreams-metal-mitchell-league.trycloudflare.com")}
+                  className="flex items-start gap-2 p-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-left transition-colors"
+                >
+                  <Lock className="size-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-semibold text-foreground text-xs flex items-center gap-1.5">
+                      Túnel HTTPS Seguro Cloudflare <Badge className="bg-emerald-500/20 text-emerald-300 text-[9px] py-0">Recomendado para Lovable</Badge>
+                    </div>
+                    <div className="font-mono text-[10px] text-emerald-300/80 truncate">
+                      https://dreams-metal-mitchell-league.trycloudflare.com
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">
+                      Sem bloqueio de Mixed Content • Funciona em qualquer navegador sem configuração
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setTempGatewayUrl("http://127.0.0.1:1984")}
+                  className="flex items-start gap-2 p-2 rounded-lg border border-border/60 bg-muted/40 hover:bg-muted/70 text-left transition-colors"
+                >
+                  <Server className="size-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-semibold text-foreground text-xs">
+                      Rede Local Direta (127.0.0.1:1984)
+                    </div>
+                    <div className="font-mono text-[10px] text-muted-foreground truncate">
+                      http://127.0.0.1:1984
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">
+                      Para uso local ou executando o projeto com npm run preview
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-lg border border-border/60 bg-muted/30 space-y-1 text-[11px] text-muted-foreground">
+              <div className="font-semibold text-foreground flex items-center gap-1.5">
+                <Globe className="size-3.5 text-primary" /> Como funciona o Acesso Seguro no Lovable?
+              </div>
+              <p>
+                Como a plataforma Lovable roda sob <strong>HTTPS</strong>, navegadores modernos impedem conexões diretas a portas HTTP locais sem certificado. O túnel seguro criado pelo Docker resolve isso instantaneamente com criptografia TLS de ponta a ponta.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setIsGatewayModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                const clean = tempGatewayUrl.trim().replace(/\/$/, "");
+                setGatewayUrl(clean);
+                setIsGatewayModalOpen(false);
+                toast.success("Endereço do Gateway atualizado!", {
+                  description: clean,
+                });
+              }}
+            >
+              Salvar e Conectar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

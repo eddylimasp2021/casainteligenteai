@@ -131,7 +131,6 @@ export const INITIAL_CAMERAS: IpCamera[] = [
     username: "admin",
     password: "", // Senha protegida mantida no gateway local
     streamName: "garagem_rua",
-    gatewayHost: "localhost:1984",
     activeProtocol: "WebRTC",
     resolution: "1080p (1920x1080)",
     fps: 30,
@@ -171,7 +170,6 @@ export const INITIAL_CAMERAS: IpCamera[] = [
     username: "admin",
     password: "",
     streamName: "cam_192_168_0_240",
-    gatewayHost: "localhost:1984",
     activeProtocol: "WebRTC",
     resolution: "3240p (1920x3240 - 3 Lentes Full HD)",
     fps: 30,
@@ -215,7 +213,6 @@ export const INITIAL_CAMERAS: IpCamera[] = [
     username: "admin",
     password: "",
     streamName: "cam_192_168_0_198",
-    gatewayHost: "localhost:1984",
     activeProtocol: "WebRTC",
     resolution: "1080p (1920x1080)",
     fps: 30,
