@@ -9,6 +9,11 @@ import {
   Minimize2,
   Volume2,
   VolumeX,
+  Volume1,
+  Mic,
+  MicOff,
+  Radio,
+  Sliders,
   Activity,
   AlertTriangle,
   CheckCircle2,
@@ -68,6 +73,12 @@ export function RealCameraPlayer({
   const [realResolution, setRealResolution] = useState<string | null>(null);
   const [realCodec, setRealCodec] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(true);
+  const [volume, setVolume] = useState<number>(0.8);
+  const [hasAudioTrack, setHasAudioTrack] = useState<boolean>(false);
+  const [isTalking, setIsTalking] = useState<boolean>(false);
+  const [isIntercomOpen, setIsIntercomOpen] = useState<boolean>(false);
+  const [micLevel, setMicLevel] = useState<number>(0);
+  const [isPushToTalkHolding, setIsPushToTalkHolding] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
@@ -83,6 +94,12 @@ export function RealCameraPlayer({
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const audioTransceiverRef = useRef<RTCRtpTransceiver | null>(null);
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animFrameRef = useRef<number | null>(null);
   const pingIntervalRef = useRef<number | null>(null);
   const frameTimeoutRef = useRef<number | null>(null);
   const snapshotIntervalRef = useRef<number | null>(null);
@@ -138,6 +155,30 @@ export function RealCameraPlayer({
       } catch {}
     }
 
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    if (audioContextRef.current) {
+      try {
+        audioContextRef.current.close();
+      } catch {}
+      audioContextRef.current = null;
+      analyserRef.current = null;
+    }
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach((track) => track.stop());
+      micStreamRef.current = null;
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+    }
+    audioTransceiverRef.current = null;
+    setIsTalking(false);
+    setMicLevel(0);
+    setHasAudioTrack(false);
+
     if (peerConnectionRef.current) {
       peerConnectionRef.current.ontrack = null;
       peerConnectionRef.current.oniceconnectionstatechange = null;
@@ -184,21 +225,30 @@ export function RealCameraPlayer({
       });
       peerConnectionRef.current = pc;
 
-      // 2. Add video & audio transceivers to request incoming streams
+      // 2. Add video & audio transceivers: "sendrecv" audio enables camera backchannel (Two-Way Audio / Intercom)
       pc.addTransceiver("video", { direction: "recvonly" });
-      pc.addTransceiver("audio", { direction: "recvonly" });
+      const audioTransceiver = pc.addTransceiver("audio", { direction: "sendrecv" });
+      audioTransceiverRef.current = audioTransceiver;
 
-      // 3. Attach incoming media track to video element
+      // 3. Attach incoming media tracks (both video & audio) to consolidated MediaStream
       pc.ontrack = (event) => {
-        let stream: MediaStream;
-        if (event.streams && event.streams[0]) {
-          stream = event.streams[0];
-        } else {
-          stream = new MediaStream([event.track]);
+        if (!mediaStreamRef.current) {
+          mediaStreamRef.current = new MediaStream();
+        }
+        if (!mediaStreamRef.current.getTracks().some((t) => t.id === event.track.id)) {
+          mediaStreamRef.current.addTrack(event.track);
+        }
+
+        if (event.track.kind === "audio") {
+          setHasAudioTrack(true);
         }
 
         if (videoRef.current) {
-          videoRef.current.srcObject = stream;
+          if (videoRef.current.srcObject !== mediaStreamRef.current) {
+            videoRef.current.srcObject = mediaStreamRef.current;
+          }
+          videoRef.current.volume = volume;
+          videoRef.current.muted = isMuted;
           videoRef.current.play().catch((playErr) => {
             console.warn("Autoplay policy retry with muted:", playErr);
             if (videoRef.current) {
@@ -416,6 +466,150 @@ export function RealCameraPlayer({
       document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
     }
   };
+
+  // Toggle audio listening
+  const handleToggleAudio = useCallback(
+    (e?: React.MouseEvent) => {
+      if (e) e.stopPropagation();
+      const nextMuted = !isMuted;
+      setIsMuted(nextMuted);
+
+      const video = videoRef.current;
+      if (video) {
+        video.muted = nextMuted;
+        video.volume = volume;
+        if (!nextMuted) {
+          video.play().catch((err) => {
+            console.warn("Audio playback gesture required:", err);
+          });
+          toast.success("Áudio da câmera ativado!", {
+            description: `Ouvindo o microfone ambiente de ${camera.name}`,
+          });
+        } else {
+          toast.info("Áudio silenciado.");
+        }
+      }
+    },
+    [camera.name, isMuted, volume]
+  );
+
+  // Adjust listening volume
+  const handleVolumeChange = useCallback(
+    (newVol: number) => {
+      setVolume(newVol);
+      const video = videoRef.current;
+      if (video) {
+        video.volume = newVol;
+        if (newVol > 0 && isMuted) {
+          setIsMuted(false);
+          video.muted = false;
+          video.play().catch(() => {});
+        } else if (newVol === 0) {
+          setIsMuted(true);
+          video.muted = true;
+        }
+      }
+    },
+    [isMuted]
+  );
+
+  // Two-way audio: Speak into camera speaker (Interfone)
+  const startTalking = useCallback(async () => {
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        toast.error("Navegador não suporta acesso ao microfone ou requer conexão segura HTTPS/localhost.");
+        return;
+      }
+
+      // 1. Request microphone input
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      });
+      micStreamRef.current = stream;
+      const micTrack = stream.getAudioTracks()[0];
+
+      // 2. Setup real-time VU meter
+      try {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          const ctx = new AudioCtx();
+          const source = ctx.createMediaStreamSource(stream);
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 64;
+          source.connect(analyser);
+          audioContextRef.current = ctx;
+          analyserRef.current = analyser;
+
+          const dataArray = new Uint8Array(analyser.frequencyBinCount);
+          const updateVU = () => {
+            if (!analyserRef.current) return;
+            analyserRef.current.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+              sum += dataArray[i];
+            }
+            const avg = sum / dataArray.length;
+            setMicLevel(Math.min(100, Math.round((avg / 128) * 100)));
+            animFrameRef.current = requestAnimationFrame(updateVU);
+          };
+          updateVU();
+        }
+      } catch (vuErr) {
+        console.warn("Could not start VU meter:", vuErr);
+      }
+
+      // 3. Connect microphone track to WebRTC peer connection sender
+      if (audioTransceiverRef.current?.sender) {
+        await audioTransceiverRef.current.sender.replaceTrack(micTrack);
+      }
+
+      setIsTalking(true);
+      toast.success("Transmitindo voz!", {
+        description: `Falando no alto-falante da câmera ${camera.name}`,
+      });
+    } catch (err: any) {
+      console.error("Microphone error:", err);
+      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+        toast.error("Permissão de microfone negada no navegador.", {
+          description: "Autorize o uso do microfone nas permissões do site para falar na câmera.",
+        });
+      } else {
+        toast.error(`Falha ao acessar microfone: ${err.message || err}`);
+      }
+      setIsTalking(false);
+    }
+  }, [camera.name]);
+
+  // Stop talking
+  const stopTalking = useCallback(() => {
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    if (audioContextRef.current) {
+      try {
+        audioContextRef.current.close();
+      } catch {}
+      audioContextRef.current = null;
+      analyserRef.current = null;
+    }
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach((t) => t.stop());
+      micStreamRef.current = null;
+    }
+    if (audioTransceiverRef.current?.sender) {
+      audioTransceiverRef.current.sender.replaceTrack(null).catch(() => {});
+    }
+
+    setIsTalking(false);
+    setMicLevel(0);
+    toast.info("Transmissão de voz encerrada.");
+  }, []);
 
   // Snapshot capture from frame
   const handleCaptureSnapshot = () => {
@@ -683,8 +877,45 @@ export function RealCameraPlayer({
           </div>
         )}
 
-        {/* Top OSD Bar */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between p-2.5 text-xs font-mono text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] bg-gradient-to-b from-black/85 via-black/40 to-transparent z-20">
+        {/* Floating Active Talking Banner (Appears when microphone is transmitting to camera speaker) */}
+        {isTalking && (
+          <div className="absolute top-12 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2.5 px-3 sm:px-4 py-1.5 rounded-full bg-rose-600/95 text-white text-[11px] sm:text-xs font-semibold shadow-2xl border border-rose-300 animate-pulse pointer-events-auto">
+            <div className="relative flex items-center justify-center">
+              <Radio className="size-4 text-white" />
+              <span className="absolute size-2 bg-white rounded-full animate-ping" />
+            </div>
+            <span>TRANSMITINDO VOZ AO VIVO NO ALTO-FALANTE</span>
+            {/* Real VU Meter Bar Display */}
+            <div className="flex items-end gap-0.5 h-3.5 bg-black/40 px-1 py-0.5 rounded">
+              <div
+                className="w-1 bg-white rounded-full transition-all duration-75"
+                style={{ height: `${Math.max(25, micLevel)}%` }}
+              />
+              <div
+                className="w-1 bg-white rounded-full transition-all duration-75"
+                style={{ height: `${Math.max(35, micLevel * 0.9)}%` }}
+              />
+              <div
+                className="w-1 bg-white rounded-full transition-all duration-75"
+                style={{ height: `${Math.max(20, micLevel * 0.7)}%` }}
+              />
+            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={(e) => {
+                e.stopPropagation();
+                stopTalking();
+              }}
+              className="h-5 px-2 text-[10px] bg-black/40 hover:bg-black/70 text-white rounded font-bold"
+            >
+              Encerrar
+            </Button>
+          </div>
+        )}
+
+        {/* Top OSD Bar: Camera info + Always-Visible Audio & Intercom Buttons */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-wrap items-center justify-between gap-2 p-2.5 text-xs font-mono text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] bg-gradient-to-b from-black/90 via-black/50 to-transparent z-20">
           <div className="flex items-center gap-2">
             <span className="flex items-center gap-1.5 font-bold tracking-wide">
               <span
@@ -709,6 +940,67 @@ export function RealCameraPlayer({
                 REC {Math.floor(recordSeconds / 60).toString().padStart(2, "0")}:{(recordSeconds % 60).toString().padStart(2, "0")}
               </span>
             )}
+          </div>
+
+          {/* Central Action Center: Audio Listening Toggle & Push-To-Talk Intercom (ALWAYS VISIBLE) */}
+          <div className="flex items-center gap-1.5 pointer-events-auto">
+            {/* 1. Escutar Áudio (Listening Toggle & Volume) */}
+            {isMuted ? (
+              <button
+                type="button"
+                onClick={handleToggleAudio}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-sans font-semibold tracking-tight transition-all duration-200 shadow-md bg-neutral-900/95 text-amber-300 border border-amber-500/50 hover:bg-amber-500/20 hover:border-amber-400 active:scale-95 cursor-pointer"
+                title="Clique para ativar o áudio do ambiente da câmera"
+              >
+                <VolumeX className="size-3 text-amber-400 shrink-0" />
+                <span className="hidden xs:inline">Sem Áudio • Clique p/ Ouvir</span>
+                <span className="xs:hidden">Ouvir</span>
+              </button>
+            ) : (
+              <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-sans font-semibold shadow-md bg-emerald-950/90 text-emerald-300 border border-emerald-500/60 transition-all">
+                <button
+                  type="button"
+                  onClick={handleToggleAudio}
+                  className="flex items-center gap-1 hover:text-emerald-100 active:scale-95 cursor-pointer"
+                  title="Clique para silenciar o áudio"
+                >
+                  <Volume2 className="size-3 text-emerald-400 animate-pulse shrink-0" />
+                  <span>Ouvindo</span>
+                </button>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={volume}
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    handleVolumeChange(parseFloat(e.target.value));
+                  }}
+                  className="w-12 h-1 accent-emerald-400 cursor-pointer"
+                  title={`Volume: ${Math.round(volume * 100)}%`}
+                />
+                <span className="text-[9px] text-emerald-400 font-mono">{Math.round(volume * 100)}%</span>
+              </div>
+            )}
+
+            {/* 2. Falar na Câmera (Two-Way Audio Intercom) */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsIntercomOpen(true);
+              }}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-sans font-semibold tracking-tight transition-all duration-200 shadow-md cursor-pointer active:scale-95 ${
+                isTalking
+                  ? "bg-rose-600 text-white border border-rose-400 animate-pulse"
+                  : "bg-blue-950/90 hover:bg-blue-900 text-blue-200 border border-blue-500/50 hover:border-blue-400"
+              }`}
+              title="Abrir Interfone para falar no alto-falante da câmera"
+            >
+              <Mic className={`size-3 shrink-0 ${isTalking ? "text-white animate-bounce" : "text-blue-400"}`} />
+              <span>{isTalking ? "Transmitindo Voz..." : "Falar"}</span>
+            </button>
           </div>
 
           <div className="flex items-center gap-2 font-mono">
@@ -881,24 +1173,55 @@ export function RealCameraPlayer({
               )}
             </Button>
 
-            {/* Audio Mute/Unmute */}
-            {protocol !== "Snapshot" && (
+            {/* Audio Mute/Unmute & Volume */}
+            <div className="flex items-center gap-1">
               <Button
                 size="sm"
                 variant="ghost"
-                className="size-7 p-0 text-white hover:bg-white/20"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const newMute = !isMuted;
-                  setIsMuted(newMute);
-                  if (videoRef.current) videoRef.current.muted = newMute;
-                  toast.info(newMute ? "Áudio mutado" : "Áudio ativado");
-                }}
-                title={isMuted ? "Ativar Áudio da Câmera" : "Silenciar Áudio"}
+                className={`size-7 p-0 ${
+                  isMuted ? "text-amber-400 hover:bg-amber-500/20" : "text-emerald-400 hover:bg-emerald-500/20"
+                }`}
+                onClick={handleToggleAudio}
+                title={isMuted ? "Ativar Áudio da Câmera (Ouvir Ambiente)" : "Silenciar Áudio da Câmera"}
               >
                 {isMuted ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
               </Button>
-            )}
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={isMuted ? 0 : volume}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  handleVolumeChange(parseFloat(e.target.value));
+                }}
+                className="w-12 h-1 accent-emerald-400 cursor-pointer hidden md:inline-block"
+                title={`Volume: ${Math.round(volume * 100)}%`}
+              />
+            </div>
+
+            {/* Talk / Intercom Button */}
+            <Button
+              size="sm"
+              variant="ghost"
+              className={`size-7 p-0 ${
+                isTalking
+                  ? "bg-rose-600 text-white animate-pulse hover:bg-rose-700"
+                  : "text-blue-400 hover:bg-blue-500/20 hover:text-blue-300"
+              }`}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsIntercomOpen(true);
+              }}
+              title={
+                isTalking
+                  ? "Transmitindo voz no alto-falante (Clique para abrir interfone)"
+                  : "Falar no Alto-Falante da Câmera (Interfone)"
+              }
+            >
+              {isTalking ? <Mic className="size-3.5 animate-bounce text-white" /> : <Mic className="size-3.5" />}
+            </Button>
 
             {/* Fullscreen Button */}
             <Button
@@ -1022,6 +1345,148 @@ export function RealCameraPlayer({
           <DialogFooter className="pt-2">
             <Button size="sm" variant="outline" onClick={() => setShowDiagnostic(false)}>
               Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Two-Way Audio Intercom Modal Dialog */}
+      <Dialog
+        open={isIntercomOpen}
+        onOpenChange={(open) => {
+          setIsIntercomOpen(open);
+          if (!open && isTalking) {
+            stopTalking();
+          }
+        }}
+      >
+        <DialogContent className="max-w-md font-sans text-xs">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Mic className="size-5 text-blue-400" /> Interfone Bidirecional — {camera.name}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Comunicação de voz bidirecional em tempo real: ouça o ambiente e fale diretamente pelo alto-falante integrado da câmera IP.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2">
+            {/* Main Push-To-Talk Button Section */}
+            <div className="flex flex-col items-center justify-center py-6 px-4 rounded-xl border border-border/60 bg-gradient-to-b from-muted/30 to-muted/10 space-y-3 text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  if (isTalking) {
+                    stopTalking();
+                  } else {
+                    startTalking();
+                  }
+                }}
+                className={`relative flex items-center justify-center size-24 rounded-full transition-all duration-300 shadow-xl select-none cursor-pointer active:scale-95 ${
+                  isTalking
+                    ? "bg-rose-600 text-white shadow-[0_0_30px_rgba(225,29,72,0.6)] ring-4 ring-rose-400/50 animate-pulse"
+                    : "bg-blue-600 hover:bg-blue-500 text-white shadow-blue-500/20 hover:shadow-blue-500/40"
+                }`}
+                title={isTalking ? "Clique para Encerrar Transmissão" : "Clique para Começar a Falar"}
+              >
+                {isTalking ? (
+                  <MicOff className="size-10 animate-bounce" />
+                ) : (
+                  <Mic className="size-10" />
+                )}
+                {isTalking && (
+                  <span className="absolute inset-0 rounded-full border-2 border-white animate-ping opacity-75" />
+                )}
+              </button>
+
+              <div className="space-y-1">
+                <span className="font-bold text-sm text-foreground block">
+                  {isTalking ? "🎙️ FALANDO NO ALTO-FALANTE" : "CLIQUE PARA FALAR"}
+                </span>
+                <p className="text-[11px] text-muted-foreground">
+                  {isTalking
+                    ? "Sua voz está sendo reproduzida na câmera em tempo real. Clique novamente para encerrar."
+                    : "Pressione o botão para ativar o microfone e transmitir sua voz para o alto-falante da câmera."}
+                </p>
+              </div>
+
+              {/* Real-time Microphone VU Meter Bar */}
+              <div className="w-full max-w-xs space-y-1.5 pt-2">
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                  <span>Sensibilidade do Microfone</span>
+                  <span className="font-mono font-bold text-foreground">{isTalking ? `${micLevel}%` : "Mudo"}</span>
+                </div>
+                <div className="h-3 w-full overflow-hidden rounded-full bg-neutral-900 border border-border/40 p-0.5 flex items-center">
+                  <div
+                    className={`h-full rounded-full transition-all duration-75 ${
+                      isTalking
+                        ? micLevel > 70
+                          ? "bg-rose-500"
+                          : micLevel > 35
+                          ? "bg-amber-400"
+                          : "bg-emerald-400"
+                        : "w-0"
+                    }`}
+                    style={{ width: isTalking ? `${Math.max(5, micLevel)}%` : "0%" }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Listening Speaker Volume Control */}
+            <div className="p-3 rounded-lg border border-border/60 bg-muted/20 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-[11px] text-foreground flex items-center gap-1.5">
+                  <Volume2 className="size-3.5 text-emerald-400" /> Volume do Alto-Falante Local (Escutar Câmera)
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleToggleAudio}
+                  className="h-6 px-2 text-[10px] gap-1"
+                >
+                  {isMuted ? <VolumeX className="size-3 text-amber-400" /> : <Volume2 className="size-3 text-emerald-400" />}
+                  {isMuted ? "Mutado (Ativar)" : "Ouvindo"}
+                </Button>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={isMuted ? 0 : volume}
+                  onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                  className="flex-1 h-2 accent-primary cursor-pointer"
+                />
+                <span className="text-xs font-mono font-bold text-primary min-w-[3rem] text-right">
+                  {isMuted ? "0%" : `${Math.round(volume * 100)}%`}
+                </span>
+              </div>
+            </div>
+
+            {/* Technical Context & Permissions Info */}
+            <div className="p-3 rounded-lg border border-border/60 bg-black/40 space-y-1.5 text-[11px] text-muted-foreground">
+              <div className="font-bold text-foreground flex items-center gap-1.5">
+                <CheckCircle2 className="size-3.5 text-emerald-400" /> Informações do Canal de Áudio
+              </div>
+              <div>• Transmissão de Retorno: <code className="text-primary">ONVIF / RTSP Backchannel (G.711 / Opus)</code></div>
+              <div>• Gateway de Mídia: <code className="text-primary">{gatewayBase}</code></div>
+              <div>• Requisito do Navegador: Permissão de microfone autorizada no navegador (HTTPS ou localhost).</div>
+            </div>
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button
+              size="sm"
+              variant={isTalking ? "destructive" : "outline"}
+              onClick={() => {
+                if (isTalking) stopTalking();
+                setIsIntercomOpen(false);
+              }}
+            >
+              {isTalking ? "Encerrar e Fechar" : "Fechar"}
             </Button>
           </DialogFooter>
         </DialogContent>

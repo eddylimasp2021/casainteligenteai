@@ -37,13 +37,25 @@ ffmpeg:
 # Os fluxos podem ser definidos estaticamente aqui ou dinamicamente via API REST:
 # PUT http://localhost:1984/api/streams?name=garagem_rua&src=rtsp://admin:senha@192.168.0.139:554/onvif1
 streams:
-  # Câmera Garagem Rua (Stream Original RTSP H.265 da Câmera)
+  # Câmera Garagem Rua (Stream Original RTSP H.265 da Câmera com Backchannel de Áudio Bidirecional)
   garagem_rua:
     - rtsp://admin:ambar786@192.168.0.139:554/onvif1
+    - rtsp://admin:ambar786@192.168.0.139:554/onvif1#backchannel=1
 
-  # Câmera Garagem Rua H.264 (Transcodificado para WebRTC em navegadores Chrome/Edge)
+  # Câmera Garagem Rua H.264 (Transcodificado com Áudio para WebRTC em navegadores Chrome/Edge + Áudio de Retorno Interfone)
   garagem_rua_h264:
-    - ffmpeg:rtsp://127.0.0.1:8554/garagem_rua#video=h264
+    - ffmpeg:rtsp://127.0.0.1:8554/garagem_rua#video=h264#audio=copy
+    - rtsp://admin:ambar786@192.168.0.139:554/onvif1#backchannel=1
+
+  # Câmera 192.168.0.198 (Áudio Bidirecional / Interfone)
+  cam_192_168_0_198:
+    - rtsp://admin:ambar786@192.168.0.198:554/onvif1
+    - rtsp://admin:ambar786@192.168.0.198:554/onvif1#backchannel=1
+
+  # Câmera 192.168.0.240 (Áudio Bidirecional / Interfone)
+  cam_192_168_0_240:
+    - rtsp://admin:ambar786@192.168.0.240:554/onvif1
+    - rtsp://admin:ambar786@192.168.0.240:554/onvif1#backchannel=1
 
 # 5. Configuração de Logs com Rotação
 log:
