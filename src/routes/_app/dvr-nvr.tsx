@@ -228,7 +228,7 @@ function DvrNvrPage() {
 
   // View Engine: "real" (WebRTC via Docker Media Gateway go2rtc) vs "simulation" (AI Canvas)
   const [viewEngine, setViewEngine] = useState<"real" | "simulation">("real");
-  const CURRENT_CLOUDFLARE_TUNNEL = "https://cool-weekends-participation-florists.trycloudflare.com";
+  const CURRENT_CLOUDFLARE_TUNNEL = "https://strikes-self-timer-dose.trycloudflare.com";
   const [gatewayUrl, setGatewayUrl] = useState<string>(() => {
     try {
       const saved = localStorage.getItem("homepulse_dvr_gateway_url_v1");
@@ -1247,7 +1247,7 @@ function DvrNvrPage() {
               <div className="grid grid-cols-1 gap-2">
                 <button
                   type="button"
-                  onClick={() => setTempGatewayUrl("https://cool-weekends-participation-florists.trycloudflare.com")}
+                  onClick={() => setTempGatewayUrl(CURRENT_CLOUDFLARE_TUNNEL)}
                   className="flex items-start gap-2 p-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-left transition-colors"
                 >
                   <Lock className="size-4 text-emerald-400 shrink-0 mt-0.5" />
@@ -1256,7 +1256,7 @@ function DvrNvrPage() {
                       Túnel HTTPS Seguro Cloudflare <Badge className="bg-emerald-500/20 text-emerald-300 text-[9px] py-0">Recomendado para Lovable</Badge>
                     </div>
                     <div className="font-mono text-[10px] text-emerald-300/80 truncate">
-                      https://cool-weekends-participation-florists.trycloudflare.com
+                      {CURRENT_CLOUDFLARE_TUNNEL}
                     </div>
                     <div className="text-[10px] text-muted-foreground mt-0.5">
                       Sem bloqueio de Mixed Content • Suporta Vídeo Ao Vivo e Gravações NVR
