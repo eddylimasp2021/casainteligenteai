@@ -205,7 +205,7 @@ export function StorageSettingsDialog({
       const updatedDisks = disks.map((d) => {
         let mPath = d.mountPath;
         let dName = d.name;
-        if (/^c:/i.test(mPath) || dName.toLowerCase().includes("disco c")) {
+        if (/^c:/i.test(mPath ?? "") || dName.toLowerCase().includes("disco c")) {
           mPath = d.id === "disk-1" ? "D:\\Gravacoes_CFTV" : "D:\\Gravacoes_CFTV\\Snapshots";
           dName =
             d.id === "disk-1"
