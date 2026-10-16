@@ -228,7 +228,7 @@ function DvrNvrPage() {
 
   // View Engine: "real" (WebRTC via Docker Media Gateway go2rtc) vs "simulation" (AI Canvas)
   const [viewEngine, setViewEngine] = useState<"real" | "simulation">("real");
-  const CURRENT_CLOUDFLARE_TUNNEL = "https://responsibility-decision-charleston-electronics.trycloudflare.com";
+  const CURRENT_CLOUDFLARE_TUNNEL = "https://diamonds-supports-screens-heat.trycloudflare.com";
   const [gatewayUrl, setGatewayUrl] = useState<string>(() => {
     try {
       const saved = localStorage.getItem("homepulse_dvr_gateway_url_v1");
