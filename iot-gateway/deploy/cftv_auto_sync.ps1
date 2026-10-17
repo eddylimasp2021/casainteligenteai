@@ -34,7 +34,10 @@ function Sync-TunnelUrl([string]$url) {
     # 2. Salva no public/cftv_gateway.json
     try {
         $jsonContent = "{`"tunnel_url`":`"$url`",`"updated_at`":`"$(Get-Date -Format s)`",`"status`":`"online`"}"
-        $publicFile = "d:\Sistema ja  ok\casainteligenteai\public\cftv_gateway.json"
+        $publicFile = Join-Path $PSScriptRoot "..\..\public\cftv_gateway.json"
+        if (-not (Test-Path (Split-Path -Parent $publicFile))) {
+            $publicFile = "D:\DEV-Apps\casainteligenteai\public\cftv_gateway.json"
+        }
         [System.IO.File]::WriteAllText($publicFile, $jsonContent)
         Write-Host "  [OK] Sincronizado com public\cftv_gateway.json" -ForegroundColor Gray
     } catch {}

@@ -49,7 +49,7 @@ goto CHECK_ENGINE
 :DOCKER_READY
 echo.
 echo [2/3] Subindo servicos das cameras e gravador no Disco D...
-cd /d "d:\Sistema ja  ok\casainteligenteai\iot-gateway\deploy"
+cd /d "%~dp0iot-gateway\deploy"
 docker compose up -d
 
 echo.
