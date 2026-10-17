@@ -235,7 +235,7 @@ function DvrNvrPage() {
 
   // View Engine: "real" (WebRTC via Docker Media Gateway go2rtc) vs "simulation" (AI Canvas)
   const [viewEngine, setViewEngine] = useState<"real" | "simulation">("real");
-  const CURRENT_CLOUDFLARE_TUNNEL = "https://usb-recommendations-harvey-ram.trycloudflare.com";
+  const CURRENT_CLOUDFLARE_TUNNEL = "https://cake-studied-rendered-contemporary.trycloudflare.com";
   
   // Connection Mode: "robot" (Auto-Sync) | "lan" (Rede Local Direta) | "permanent" (Túnel Fixo Zero Trust)
   const [connectionMode, setConnectionMode] = useState<"robot" | "lan" | "permanent">(() => {

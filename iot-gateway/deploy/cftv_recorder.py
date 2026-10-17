@@ -21,6 +21,8 @@ import urllib.request
 import urllib.error
 import threading
 import subprocess
+import struct
+import socket
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
@@ -33,7 +35,7 @@ RECORDINGS_DIR = os.environ.get("RECORDINGS_DIR", "/recordings")
 SEGMENT_SECONDS = int(os.environ.get("SEGMENT_SECONDS", "900"))  # 15 minutes per chunk
 
 ACTIVE_TUNNEL_INFO = {
-    "url": "https://diamonds-supports-screens-heat.trycloudflare.com",
+    "url": "https://cake-studied-rendered-contemporary.trycloudflare.com",
     "updated_at": datetime.now().isoformat(),
     "status": "online"
 }
@@ -137,6 +139,101 @@ def start_recorders():
         t.start()
 
 # ---------------------------------------------------------------------------
+# Smart TV (LG webOS / Tizen / Local IoT) Bridge
+# ---------------------------------------------------------------------------
+def make_ws_frame(data_str: str) -> bytes:
+    data = data_str.encode('utf-8')
+    length = len(data)
+    mask = os.urandom(4)
+    if length <= 125:
+        header = struct.pack('!BB', 0x81, 0x80 | length)
+    elif length <= 65535:
+        header = struct.pack('!BBH', 0x81, 0x80 | 126, length)
+    else:
+        header = struct.pack('!BBQ', 0x81, 0x80 | 127, length)
+    return header + mask + bytearray(b ^ mask[i % 4] for i, b in enumerate(data))
+
+def read_ws_frame(sock) -> str:
+    head = sock.recv(2)
+    if len(head) < 2:
+        return ""
+    b1, b2 = head[0], head[1]
+    length = b2 & 0x7F
+    if length == 126:
+        ext = sock.recv(2)
+        length = struct.unpack('!H', ext)[0]
+    elif length == 127:
+        ext = sock.recv(8)
+        length = struct.unpack('!Q', ext)[0]
+    data = b''
+    while len(data) < length:
+        chunk = sock.recv(length - len(data))
+        if not chunk:
+            break
+        data += chunk
+    return data.decode('utf-8', errors='replace')
+
+def execute_lg_tv_command(ip="192.168.0.168", uri="", payload=None, client_key="c8708eb7cd1845c6aacec78f6cdc370d", permissions=None, timeout=3.5):
+    if payload is None:
+        payload = {}
+    if permissions is None:
+        permissions = ['CONTROL_AUDIO', 'CONTROL_POWER', 'WRITE_NOTIFICATION_TOAST']
+    try:
+        s = socket.socket()
+        s.settimeout(timeout)
+        s.connect((ip, 3000))
+        s.sendall(b'GET / HTTP/1.1\r\nHost: ' + ip.encode() + b':3000\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n')
+        s.recv(1024)
+
+        reg = {
+            'type': 'register',
+            'id': 'reg_gw',
+            'payload': {
+                'forcePairing': False,
+                'pairingType': 'PROMPT',
+                'client-key': client_key or 'c8708eb7cd1845c6aacec78f6cdc370d',
+                'manifest': {
+                    'manifestVersion': 1,
+                    'appVersion': '1.0',
+                    'permissions': permissions
+                }
+            }
+        }
+        s.sendall(make_ws_frame(json.dumps(reg)))
+        reg_resp = read_ws_frame(s)
+        reg_data = json.loads(reg_resp) if reg_resp else {}
+
+        if not uri:
+            s.close()
+            return {
+                "ok": True,
+                "online": True,
+                "registered": reg_data.get("type") == "registered",
+                "client_key": reg_data.get("payload", {}).get("client-key", client_key),
+                "reg": reg_data
+            }
+
+        cmd_id = f"cmd_{int(time.time()*1000)}"
+        cmd = {
+            'type': 'request',
+            'id': cmd_id,
+            'uri': uri,
+            'payload': payload
+        }
+        s.sendall(make_ws_frame(json.dumps(cmd)))
+        cmd_resp = read_ws_frame(s)
+        s.close()
+        cmd_data = json.loads(cmd_resp) if cmd_resp else {}
+        is_ok = bool(cmd_data.get("payload", {}).get("returnValue", False) or cmd_data.get("type") == "response")
+        return {
+            "ok": is_ok,
+            "response": cmd_data,
+            "reg": reg_data
+        }
+    except Exception as e:
+        return {"ok": False, "online": False, "error": str(e)}
+
+# ---------------------------------------------------------------------------
 # HTTP Handler: Reverse Proxy, Search API & Video Streamer
 # ---------------------------------------------------------------------------
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
@@ -167,6 +264,13 @@ class CFTVGatewayHandler(BaseHTTPRequestHandler):
         # 1.1 API: Active Tunnel Info
         if path == "/api/tunnel_info":
             self.send_json_response(ACTIVE_TUNNEL_INFO)
+            return
+
+        # 1.2 API: Smart TV Status
+        if path == "/api/tv/status":
+            ip = query.get("ip", ["192.168.0.168"])[0]
+            res = execute_lg_tv_command(ip=ip, uri="ssap://audio/getVolume")
+            self.send_json_response(res)
             return
 
         # 2. API: List available recording dates
@@ -205,6 +309,40 @@ class CFTVGatewayHandler(BaseHTTPRequestHandler):
                 self.send_json_response({"status": "ok", "tunnel": ACTIVE_TUNNEL_INFO})
             except Exception as e:
                 self.send_json_response({"status": "error", "message": str(e)})
+            return
+
+        # Smart TV API: Command execution
+        if self.path == "/api/tv/command":
+            content_len = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_len) if content_len > 0 else b"{}"
+            try:
+                data = json.loads(body.decode("utf-8"))
+                ip = data.get("ip", "192.168.0.168")
+                uri = data.get("uri", "")
+                payload = data.get("payload", {})
+                client_key = data.get("client_key") or "c8708eb7cd1845c6aacec78f6cdc370d"
+                res = execute_lg_tv_command(ip=ip, uri=uri, payload=payload, client_key=client_key)
+                self.send_json_response(res)
+            except Exception as e:
+                self.send_json_response({"ok": False, "error": str(e)})
+            return
+
+        # Smart TV API: Pairing trigger
+        if self.path == "/api/tv/pair":
+            content_len = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_len) if content_len > 0 else b"{}"
+            try:
+                data = json.loads(body.decode("utf-8"))
+                ip = data.get("ip", "192.168.0.168")
+                res = execute_lg_tv_command(
+                    ip=ip,
+                    uri="ssap://system.notifications/createToast",
+                    payload={"message": "Casa Inteligente AI emparelhada com sucesso!"},
+                    client_key="c8708eb7cd1845c6aacec78f6cdc370d"
+                )
+                self.send_json_response(res)
+            except Exception as e:
+                self.send_json_response({"ok": False, "error": str(e)})
             return
 
         # Forward all other POSTs (e.g. WebRTC SDP negotiation) to go2rtc

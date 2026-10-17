@@ -74,7 +74,7 @@ export function TimelinePlayback({
     } catch {}
     const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
     return isHttps
-      ? "https://usb-recommendations-harvey-ram.trycloudflare.com"
+      ? "https://cake-studied-rendered-contemporary.trycloudflare.com"
       : "http://127.0.0.1:1985";
   }, [propGatewayBase]);
 

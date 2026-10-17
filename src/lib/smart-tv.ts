@@ -51,6 +51,19 @@ export const SMART_TV_PRESETS: SmartTvPreset[] = [
 
 const STORAGE_LG_KEY = "homepulse_lg_client_key";
 const DEFAULT_SAVED_KEY = "c8708eb7cd1845c6aacec78f6cdc370d";
+export const DEFAULT_TV_TUNNEL_GATEWAY = "https://cake-studied-rendered-contemporary.trycloudflare.com";
+
+export function getSmartTvGatewayUrl(): string {
+  if (typeof window === "undefined") return "http://127.0.0.1:1985";
+  try {
+    const saved = localStorage.getItem("homepulse_dvr_gateway_url_v1");
+    if (saved && saved.trim() && !saved.includes("usb-recommendations") && !saved.includes("dreams-metal")) {
+      return saved.trim().replace(/\/+$/, "");
+    }
+  } catch {}
+  const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
+  return isHttps ? DEFAULT_TV_TUNNEL_GATEWAY : "http://127.0.0.1:1985";
+}
 
 export function getSavedLgClientKey(ip?: string): string {
   if (typeof window === "undefined") return DEFAULT_SAVED_KEY;
@@ -104,6 +117,32 @@ export async function pairLgWebOsTv(
   ip: string,
   onPromptVisible?: () => void
 ): Promise<{ ok: boolean; clientKey?: string; message: string }> {
+  const gw = getSmartTvGatewayUrl();
+  const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
+
+  // Rota via Gateway local / Cloudflare Tunnel
+  if (isHttps || gw) {
+    try {
+      onPromptVisible?.();
+      const res = await fetch(`${gw}/api/tv/pair`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ip }),
+        signal: AbortSignal.timeout(30000),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.ok) {
+          const key = data.client_key || DEFAULT_SAVED_KEY;
+          saveLgClientKey(ip, key);
+          return { ok: true, clientKey: key, message: "TV emparelhada com sucesso!" };
+        }
+      }
+    } catch (e) {
+      console.warn("[SmartTV] Gateway pair request error, falling back...", e);
+    }
+  }
+
   return new Promise((resolve) => {
     let resolved = false;
     const finish = (ok: boolean, clientKey: string | undefined, message: string) => {
@@ -171,10 +210,35 @@ export async function pairLgWebOsTv(
 }
 
 /**
- * Testa conectividade com a TV via WebSocket
+ * Testa conectividade com a TV via WebSocket ou Gateway Bridge
  */
 export async function testTvConnection(ip: string, port = 3000): Promise<{ ok: boolean; latencyMs: number; message: string }> {
   const start = performance.now();
+  const gw = getSmartTvGatewayUrl();
+  const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
+
+  // Se estiver em HTTPS ou tiver Gateway ativo, utiliza o Gateway para contornar Mixed Content / PNA
+  if (isHttps || gw) {
+    try {
+      const res = await fetch(`${gw}/api/tv/status?ip=${encodeURIComponent(ip)}`, {
+        signal: AbortSignal.timeout(3500),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const latencyMs = Math.round(performance.now() - start);
+        if (data.ok || data.online) {
+          return {
+            ok: true,
+            latencyMs,
+            message: `✓ Conectado com sucesso à TV em ${ip}:${port} via Gateway!`,
+          };
+        }
+      }
+    } catch (gwErr) {
+      console.warn("[SmartTV] Gateway status check failed, falling back to direct ws...", gwErr);
+    }
+  }
+
   return new Promise((resolve) => {
     let finished = false;
     const finish = (ok: boolean, msg: string) => {
@@ -210,7 +274,7 @@ export async function testTvConnection(ip: string, port = 3000): Promise<{ ok: b
 }
 
 /**
- * Envia comando direto para LG webOS TV via WebSocket
+ * Envia comando para LG webOS TV (via Gateway Bridge ou WebSocket direto)
  */
 export async function sendLgWebOsCommand(
   ip: string,
@@ -219,7 +283,49 @@ export async function sendLgWebOsCommand(
   clientKey?: string
 ): Promise<{ ok: boolean; needPairing?: boolean; message: string }> {
   const key = clientKey || getSavedLgClientKey(ip);
+  const gw = getSmartTvGatewayUrl();
+  const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
 
+  // 1. Envia via Gateway Bridge (necessário em HTTPS / Lovable para contornar Mixed Content e PNA)
+  if (isHttps || gw) {
+    try {
+      const res = await fetch(`${gw}/api/tv/command`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ip,
+          uri,
+          payload,
+          client_key: key,
+        }),
+        signal: AbortSignal.timeout(4500),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.ok) {
+          return { ok: true, message: "Comando executado com sucesso." };
+        }
+        if (data.reg?.type === "response" && data.reg?.payload?.pairingType === "PROMPT") {
+          return {
+            ok: false,
+            needPairing: true,
+            message: "Permissão necessária na TV. Aceite a mensagem no controle da TV.",
+          };
+        }
+        if (data.error && String(data.error).includes("401")) {
+          return {
+            ok: false,
+            needPairing: true,
+            message: "Permissão necessária na TV. Ative 'LG Connect Apps' na TV.",
+          };
+        }
+      }
+    } catch (e) {
+      console.warn("[SmartTV] Gateway proxy failed, attempting direct ws...", e);
+    }
+  }
+
+  // 2. Fallback direto via WebSocket local
   return new Promise((resolve) => {
     let resolved = false;
     const done = (ok: boolean, needPairing: boolean, message: string) => {
