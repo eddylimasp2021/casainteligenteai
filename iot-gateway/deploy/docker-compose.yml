@@ -12,6 +12,7 @@ services:
     volumes:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - ./mosquitto.acl:/mosquitto/config/mosquitto.acl:ro
+      - ./mosquitto.passwd:/mosquitto/config/mosquitto.passwd:ro
       - mosquitto-data:/mosquitto/data
       - mosquitto-log:/mosquitto/log
     healthcheck:

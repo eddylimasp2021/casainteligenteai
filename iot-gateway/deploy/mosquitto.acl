@@ -6,6 +6,7 @@
 user casa-gateway-user
 topic readwrite ci/v1/#
 topic readwrite zigbee2mqtt/#
+topic read $SYS/#
 
 # 2. Usuário Dispositivos ESP32 (Permissão restrita aos seus próprios tópicos)
 # Exemplo para dispositivo ci-esp32-relay-01 na casa-001:
