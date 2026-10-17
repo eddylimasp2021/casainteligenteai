@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   Lock, LockOpen, Minus, Plus, Clock, Wifi, Tv, Volume2, VolumeX,
   Power, Sparkles, CheckCircle2, ChevronUp, ChevronDown, Radio, Play, Pause,
-  CornerDownLeft, Home, Bell
+  CornerDownLeft, Home, Bell, Info, ShieldCheck
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Switch } from "@/components/ui/switch";
@@ -21,7 +21,7 @@ import { categoryIcon, friendlyError, typeLabel } from "@/lib/catalog";
 import { stateOf, type Device } from "@/lib/queries";
 import { StatusBadge } from "./ui-states";
 import { cn } from "@/lib/utils";
-import { LG_COMMANDS, sendLgWebOsCommand, testTvConnection } from "@/lib/smart-tv";
+import { LG_COMMANDS, sendLgWebOsCommand, testTvConnection, pairLgWebOsTv } from "@/lib/smart-tv";
 
 export function DeviceCard({ device, roomName, canControl, compact }: { device: Device; roomName?: string; canControl: boolean; compact?: boolean }) {
   const qc = useQueryClient();
@@ -29,6 +29,8 @@ export function DeviceCard({ device, roomName, canControl, compact }: { device: 
   const [confirm, setConfirm] = useState<Record<string, unknown> | null>(null);
   const [showRemote, setShowRemote] = useState(false);
   const [testingPing, setTestingPing] = useState(false);
+  const [pairingTv, setPairingTv] = useState(false);
+  const [showPairPromptModal, setShowPairPromptModal] = useState(false);
 
   const s = stateOf(device);
   const caps = device.capabilities ?? [];
@@ -47,7 +49,7 @@ export function DeviceCard({ device, roomName, canControl, compact }: { device: 
       last_seen_at: new Date().toISOString(),
       ip_address: tvIp || device.ip_address,
       manufacturer: device.manufacturer || (isTv ? "LG" : null),
-      model: device.model || (isTv ? "webOS Smart TV" : null),
+      model: device.model || (isTv ? "70LB7200-SA" : null),
     }).eq("id", device.id);
     setBusy(false);
     qc.invalidateQueries({ queryKey: ["devices", device.household_id] });
@@ -73,6 +75,28 @@ export function DeviceCard({ device, roomName, canControl, compact }: { device: 
       toast.error(err?.message || "Erro ao testar conexão.");
     } finally {
       setTestingPing(false);
+    }
+  }
+
+  async function handlePairTv() {
+    if (!tvIp) return toast.warning("IP da TV não configurado.");
+    setPairingTv(true);
+    toast.info("Enviando solicitação de emparelhamento para a TV...");
+    try {
+      const res = await pairLgWebOsTv(tvIp, () => {
+        setShowPairPromptModal(true);
+      });
+      if (res.ok) {
+        setShowPairPromptModal(false);
+        toast.success("✓ TV emparelhada e autorizada com sucesso!");
+        await forceOnline();
+      } else {
+        toast.warning(res.message);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Erro no emparelhamento.");
+    } finally {
+      setPairingTv(false);
     }
   }
 
@@ -107,44 +131,56 @@ export function DeviceCard({ device, roomName, canControl, compact }: { device: 
       return;
     }
 
+    let res: { ok: boolean; needPairing?: boolean; message: string } = { ok: true, message: "" };
+
     switch (action) {
       case "power":
         if (s.on) {
-          await LG_COMMANDS.powerOff(tvIp);
+          res = await LG_COMMANDS.powerOff(tvIp);
           await send({ on: false }, false, "✓ TV desligada.");
         } else {
           await send({ on: true }, false, "✓ TV ligada.");
         }
         break;
       case "vol_up":
-        await LG_COMMANDS.volumeUp(tvIp);
+        res = await LG_COMMANDS.volumeUp(tvIp);
         await send({ volume: Math.min(100, (s.volume ?? 20) + 1) });
         break;
       case "vol_down":
-        await LG_COMMANDS.volumeDown(tvIp);
+        res = await LG_COMMANDS.volumeDown(tvIp);
         await send({ volume: Math.max(0, (s.volume ?? 20) - 1) });
         break;
       case "mute":
-        await LG_COMMANDS.setMute(tvIp, true);
+        res = await LG_COMMANDS.setMute(tvIp, true);
         toast.success("✓ Áudio mutado.");
         break;
       case "youtube":
-        await LG_COMMANDS.openYoutube(tvIp);
+        res = await LG_COMMANDS.openYoutube(tvIp);
         toast.success("✓ YouTube aberto na TV.");
         break;
       case "netflix":
-        await LG_COMMANDS.openNetflix(tvIp);
+        res = await LG_COMMANDS.openNetflix(tvIp);
         toast.success("✓ Netflix aberto na TV.");
         break;
       case "toast":
         const msg = prompt("Mensagem para exibir na TV:", "Atenção: Sistema Casa Inteligente AI ativo");
         if (msg) {
-          await LG_COMMANDS.showToast(tvIp, msg);
+          res = await LG_COMMANDS.showToast(tvIp, msg);
           toast.success("✓ Notificação enviada para a tela da TV.");
         }
         break;
       default:
         break;
+    }
+
+    if (res?.needPairing) {
+      toast.error(res.message, {
+        action: {
+          label: "Emparelhar Agora",
+          onClick: handlePairTv,
+        },
+        duration: 8000,
+      });
     }
   }
 
@@ -244,9 +280,9 @@ export function DeviceCard({ device, roomName, canControl, compact }: { device: 
             <div className="rounded-xl border border-border/50 bg-muted/20 p-2.5 space-y-2">
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span className="font-medium flex items-center gap-1.5 text-foreground">
-                  <Tv className="size-3.5 text-primary" /> Funções Rápidas
+                  <Tv className="size-3.5 text-primary" /> Funções Rápidas (70LB7200)
                 </span>
-                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-primary" onClick={() => setShowRemote(true)}>
+                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-primary font-semibold" onClick={() => setShowRemote(true)}>
                   Abrir Controle Remoto
                 </Button>
               </div>
@@ -312,16 +348,39 @@ export function DeviceCard({ device, roomName, canControl, compact }: { device: 
       {/* Modal de Controle Remoto Smart TV */}
       {isTv && (
         <Dialog open={showRemote} onOpenChange={setShowRemote}>
-          <DialogContent className="sm:max-w-xs">
+          <DialogContent className="sm:max-w-sm">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-base">
                 <Tv className="size-5 text-primary" />
                 Controle Remoto — {device.name}
               </DialogTitle>
               <DialogDescription className="text-xs">
-                Controle via WebSocket local ({tvIp || "192.168.0.168"})
+                LG 70LB7200-SA • {tvIp || "192.168.0.168"}
               </DialogDescription>
             </DialogHeader>
+
+            {/* Banner de Dicas de Conexão e Emparelhamento */}
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 space-y-2 text-xs">
+              <div className="flex items-center justify-between font-semibold text-primary">
+                <span className="flex items-center gap-1.5">
+                  <ShieldCheck className="size-4" /> Autorização na TV
+                </span>
+                <span className="text-[11px] font-mono text-muted-foreground">{tvIp}</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Na TV, vá em <strong>Configurações &gt; Rede &gt; Aplicativos LG Connect</strong> e certifique-se de que está <strong>LIGADO</strong>.
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full h-8 gap-1.5 text-xs font-semibold bg-background hover:bg-primary/10 hover:text-primary"
+                disabled={pairingTv}
+                onClick={handlePairTv}
+              >
+                <Sparkles className={`size-3.5 ${pairingTv ? "animate-spin text-primary" : "text-amber-500"}`} />
+                {pairingTv ? "Aguardando confirmação na TV..." : "Emparelhar / Solicitar Permissão na TV"}
+              </Button>
+            </div>
 
             <div className="flex flex-col items-center space-y-4 py-2">
               {/* Botão Power */}
@@ -331,6 +390,7 @@ export function DeviceCard({ device, roomName, canControl, compact }: { device: 
                   variant="destructive"
                   className="rounded-full size-11 shadow"
                   onClick={() => triggerTvAction("power")}
+                  title="Ligar ou Desligar a TV"
                 >
                   <Power className="size-5" />
                 </Button>
@@ -347,13 +407,13 @@ export function DeviceCard({ device, roomName, canControl, compact }: { device: 
 
               {/* Botões de Volume e Mudo */}
               <div className="grid grid-cols-3 gap-2 w-full px-2">
-                <Button variant="secondary" className="h-10 text-xs" onClick={() => triggerTvAction("vol_down")}>
+                <Button variant="secondary" className="h-10 text-xs font-medium" onClick={() => triggerTvAction("vol_down")}>
                   <Minus className="size-4 mr-1" /> Vol -
                 </Button>
-                <Button variant="outline" className="h-10 text-xs" onClick={() => triggerTvAction("mute")}>
+                <Button variant="outline" className="h-10 text-xs font-medium" onClick={() => triggerTvAction("mute")}>
                   <VolumeX className="size-4" />
                 </Button>
-                <Button variant="secondary" className="h-10 text-xs" onClick={() => triggerTvAction("vol_up")}>
+                <Button variant="secondary" className="h-10 text-xs font-medium" onClick={() => triggerTvAction("vol_up")}>
                   <Plus className="size-4 mr-1" /> Vol +
                 </Button>
               </div>
@@ -365,6 +425,7 @@ export function DeviceCard({ device, roomName, canControl, compact }: { device: 
                   variant="ghost"
                   className="absolute top-1 size-8 rounded-full"
                   onClick={() => LG_COMMANDS.channelUp(tvIp || "192.168.0.168")}
+                  title="Canal +"
                 >
                   <ChevronUp className="size-5" />
                 </Button>
@@ -373,13 +434,14 @@ export function DeviceCard({ device, roomName, canControl, compact }: { device: 
                   variant="ghost"
                   className="absolute bottom-1 size-8 rounded-full"
                   onClick={() => LG_COMMANDS.channelDown(tvIp || "192.168.0.168")}
+                  title="Canal -"
                 >
                   <ChevronDown className="size-5" />
                 </Button>
                 <Button
                   size="sm"
                   variant="default"
-                  className="size-12 rounded-full font-bold text-xs"
+                  className="size-12 rounded-full font-bold text-xs shadow"
                   onClick={() => LG_COMMANDS.play(tvIp || "192.168.0.168")}
                 >
                   OK
@@ -405,6 +467,31 @@ export function DeviceCard({ device, roomName, canControl, compact }: { device: 
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Modal de Instrução de Pareamento na TV */}
+      <Dialog open={showPairPromptModal} onOpenChange={setShowPairPromptModal}>
+        <DialogContent className="sm:max-w-sm text-center">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-center gap-2 text-base text-primary">
+              <Tv className="size-5" /> Confirme no Controle da TV
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              A sua TV LG 70LB7200 está exibindo uma mensagem de permissão na tela agora.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="my-2 rounded-xl border bg-muted/30 p-3.5 text-xs space-y-2 text-left">
+            <p className="font-semibold text-foreground text-center">
+              "Casa Inteligente AI deseja se conectar. Permitir?"
+            </p>
+            <p className="text-muted-foreground text-[11px] text-center">
+              Pegue o controle remoto da TV e clique em <strong>Sim / Permitir</strong> para liberar os comandos.
+            </p>
+          </div>
+          <Button onClick={() => setShowPairPromptModal(false)} variant="default" className="w-full text-xs">
+            Já confirmei na TV
+          </Button>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={!!confirm} onOpenChange={(o) => !o && setConfirm(null)}>
         <AlertDialogContent>

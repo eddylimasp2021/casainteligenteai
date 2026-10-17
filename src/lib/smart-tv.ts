@@ -16,7 +16,7 @@ export interface SmartTvPreset {
 export const SMART_TV_PRESETS: SmartTvPreset[] = [
   {
     id: "lg_webos",
-    name: "LG webOS Smart TV",
+    name: "LG webOS Smart TV (70LB7200)",
     brand: "lg",
     defaultPort: 3000,
     protocol: "websocket",
@@ -50,7 +50,7 @@ export const SMART_TV_PRESETS: SmartTvPreset[] = [
 ];
 
 const STORAGE_LG_KEY = "homepulse_lg_client_key";
-const DEFAULT_SAVED_KEY = "5e5e8af3e23fabf48b4b408442b07151";
+const DEFAULT_SAVED_KEY = "c8708eb7cd1845c6aacec78f6cdc370d";
 
 export function getSavedLgClientKey(ip?: string): string {
   if (typeof window === "undefined") return DEFAULT_SAVED_KEY;
@@ -70,8 +70,108 @@ export function saveLgClientKey(ip: string, key: string): void {
   } catch {}
 }
 
+const ALL_PERMISSIONS = [
+  "LAUNCH",
+  "LAUNCH_WEBAPP",
+  "APP_TO_APP",
+  "CLOSE",
+  "TEST_OPEN",
+  "TEST_PROTECTED",
+  "CONTROL_AUDIO",
+  "CONTROL_DISPLAY",
+  "CONTROL_INPUT_JOYSTICK",
+  "CONTROL_INPUT_MEDIA_RECORDING",
+  "CONTROL_INPUT_MEDIA_PLAYBACK",
+  "CONTROL_INPUT_TV",
+  "CONTROL_POWER",
+  "READ_APP_STATUS",
+  "READ_CURRENT_CHANNEL",
+  "READ_INPUT_DEVICE_LIST",
+  "READ_NETWORK_STATUS",
+  "READ_RUNNING_APPS",
+  "READ_TV_CHANNEL_LIST",
+  "WRITE_NOTIFICATION_TOAST",
+  "READ_POWER_STATE",
+  "READ_COUNTRY_INFO",
+  "READ_SETTINGS",
+  "CONTROL_TV_SCREEN"
+];
+
 /**
- * Testa conectividade com a TV via WebSocket ou fetch
+ * Solicita pareamento com a TV LG exibindo o popup na tela da TV
+ */
+export async function pairLgWebOsTv(
+  ip: string,
+  onPromptVisible?: () => void
+): Promise<{ ok: boolean; clientKey?: string; message: string }> {
+  return new Promise((resolve) => {
+    let resolved = false;
+    const finish = (ok: boolean, clientKey: string | undefined, message: string) => {
+      if (resolved) return;
+      resolved = true;
+      resolve({ ok, clientKey, message });
+    };
+
+    const timer = setTimeout(() => {
+      finish(false, undefined, "Tempo limite excedido aguardando confirmação no controle da TV.");
+    }, 45000);
+
+    try {
+      const ws = new WebSocket(`ws://${ip}:3000`);
+
+      ws.onopen = () => {
+        const payload = {
+          type: "register",
+          id: "pair_request",
+          payload: {
+            forcePairing: true,
+            pairingType: "PROMPT",
+            manifest: {
+              manifestVersion: 1,
+              appVersion: "1.0",
+              permissions: ALL_PERMISSIONS
+            }
+          }
+        };
+        ws.send(JSON.stringify(payload));
+      };
+
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.type === "response" && msg.payload?.pairingType === "PROMPT") {
+            onPromptVisible?.();
+          } else if (msg.type === "registered") {
+            clearTimeout(timer);
+            const key = msg.payload?.["client-key"];
+            if (key) {
+              saveLgClientKey(ip, key);
+            }
+            ws.close();
+            finish(true, key, "TV emparelhada com sucesso!");
+          } else if (msg.type === "error") {
+            clearTimeout(timer);
+            ws.close();
+            finish(false, undefined, msg.error || "A TV recusou o emparelhamento.");
+          }
+        } catch {
+          // ignore parsing error
+        }
+      };
+
+      ws.onerror = () => {
+        clearTimeout(timer);
+        finish(false, undefined, "Falha de conexão com a TV.");
+      };
+    } catch (err: any) {
+      clearTimeout(timer);
+      finish(false, undefined, err?.message || "Erro ao conectar.");
+    }
+  });
+}
+
+/**
+ * Testa conectividade com a TV via WebSocket
  */
 export async function testTvConnection(ip: string, port = 3000): Promise<{ ok: boolean; latencyMs: number; message: string }> {
   const start = performance.now();
@@ -84,7 +184,6 @@ export async function testTvConnection(ip: string, port = 3000): Promise<{ ok: b
       resolve({ ok, latencyMs, message: msg });
     };
 
-    // Timeout de segurança em 2.5s
     const timer = setTimeout(() => {
       finish(false, "Tempo limite excedido ao conectar à TV.");
     }, 2500);
@@ -118,20 +217,20 @@ export async function sendLgWebOsCommand(
   uri: string,
   payload: Record<string, any> = {},
   clientKey?: string
-): Promise<{ ok: boolean; message: string }> {
+): Promise<{ ok: boolean; needPairing?: boolean; message: string }> {
   const key = clientKey || getSavedLgClientKey(ip);
 
   return new Promise((resolve) => {
     let resolved = false;
-    const done = (ok: boolean, message: string) => {
+    const done = (ok: boolean, needPairing: boolean, message: string) => {
       if (resolved) return;
       resolved = true;
-      resolve({ ok, message });
+      resolve({ ok, needPairing, message });
     };
 
     const timer = setTimeout(() => {
-      done(false, "Timeout aguardando resposta da TV.");
-    }, 3000);
+      done(false, false, "Timeout aguardando resposta da TV.");
+    }, 3500);
 
     try {
       const ws = new WebSocket(`ws://${ip}:3000`);
@@ -147,20 +246,7 @@ export async function sendLgWebOsCommand(
             manifest: {
               manifestVersion: 1,
               appVersion: "1.0",
-              signed: {
-                created: "20140509",
-                appId: "com.casainteligenteai.homepulse",
-                vendorId: "com.casainteligenteai",
-                localizedAppNames: { "": "Casa Inteligente AI" },
-                permissions: [
-                  "CONTROL_AUDIO",
-                  "CONTROL_POWER",
-                  "READ_INSTALLED_APPS",
-                  "READ_RUNNING_APPS",
-                  "CONTROL_INPUT_TV",
-                  "WRITE_NOTIFICATION_TOAST"
-                ]
-              }
+              permissions: ALL_PERMISSIONS
             }
           }
         };
@@ -182,30 +268,31 @@ export async function sendLgWebOsCommand(
               uri,
               payload
             }));
+          } else if (msg.type === "error" && String(msg.error).includes("401")) {
+            clearTimeout(timer);
+            ws.close();
+            done(false, true, "Permissão necessária na TV. Ative 'LG Connect Apps' na TV e emparelhe novamente.");
+          } else if (msg.type === "response" || msg.type === "registered") {
             clearTimeout(timer);
             setTimeout(() => {
               ws.close();
-              done(true, "Comando enviado para a TV LG.");
-            }, 300);
-          } else if (msg.type === "response" || msg.type === "registered") {
-            clearTimeout(timer);
-            ws.close();
-            done(true, "Comando executado com sucesso.");
+              done(true, false, "Comando executado com sucesso.");
+            }, 200);
           }
         } catch {
           clearTimeout(timer);
           ws.close();
-          done(true, "Comando transmitido.");
+          done(true, false, "Comando transmitido.");
         }
       };
 
       ws.onerror = (e) => {
         clearTimeout(timer);
-        done(false, "Erro de rede ao comunicar com a TV.");
+        done(false, false, "Erro de rede ao comunicar com a TV.");
       };
     } catch (err: any) {
       clearTimeout(timer);
-      done(false, err?.message || "Falha na conexão.");
+      done(false, false, err?.message || "Falha na conexão.");
     }
   });
 }
