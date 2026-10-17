@@ -436,8 +436,14 @@ export function buildHassEntitiesFromLocalState(
     const cat = d.category || "switch";
 
     let domain = "switch";
+    let icon = "Power";
+
     if (cat.includes("light") || cat.includes("iluminacao") || d.name.toLowerCase().includes("luz")) {
       domain = "light";
+      icon = "Lightbulb";
+    } else if (cat.includes("entretenimento") || d.device_type === "televisao" || d.name.toLowerCase().includes("tv")) {
+      domain = "media_player";
+      icon = "Tv";
     }
 
     const entity_id = `${domain}.${slug || d.id.slice(0, 8)}`;
@@ -447,10 +453,14 @@ export function buildHassEntitiesFromLocalState(
       state: isOn ? "on" : "off",
       attributes: {
         friendly_name: d.name,
-        icon: domain === "light" ? "Lightbulb" : "Power",
-        device_class: domain,
+        icon,
+        device_class: domain === "media_player" ? "tv" : domain,
         area_name: roomName,
         supabase_id: d.id,
+        volume_level: d.state?.volume !== undefined ? d.state.volume / 100 : 0.2,
+        is_volume_muted: false,
+        source: "HDMI 1",
+        app_name: "webOS",
         brightness: d.state?.brightness !== undefined ? Math.round((d.state.brightness / 100) * 255) : 255,
         color_temp: d.state?.color_temp || 300,
         last_changed: d.updated_at || now,
