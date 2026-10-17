@@ -103,7 +103,7 @@ const THEMES = {
 
 type ThemeKey = keyof typeof THEMES;
 
-function AIAssistantPage() {
+export function AIAssistantPage() {
   const { current } = useHousehold();
   const devices = useDevices(current?.id);
   const rooms = useRooms(current?.id);
