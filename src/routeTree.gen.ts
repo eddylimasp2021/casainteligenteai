@@ -15,6 +15,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AppAiAssistantRouteImport } from './routes/_app/ai-assistant'
+import { Route as AppAutomationsRouteImport } from './routes/_app/automations'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppDevicesRouteImport } from './routes/_app/devices'
 import { Route as AppDvrNvrRouteImport } from './routes/_app/dvr-nvr'
@@ -53,6 +54,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
 const AppAiAssistantRoute = AppAiAssistantRouteImport.update({
   id: '/ai-assistant',
   path: '/ai-assistant',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAutomationsRoute = AppAutomationsRouteImport.update({
+  id: '/automations',
+  path: '/automations',
   getParentRoute: () => AppRoute,
 } as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
@@ -112,6 +118,7 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof OnboardingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/ai-assistant': typeof AppAiAssistantRoute
+  '/automations': typeof AppAutomationsRoute
   '/dashboard': typeof AppDashboardRoute
   '/devices': typeof AppDevicesRoute
   '/dvr-nvr': typeof AppDvrNvrRoute
@@ -129,6 +136,7 @@ export interface FileRoutesByTo {
   '/onboarding': typeof OnboardingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/ai-assistant': typeof AppAiAssistantRoute
+  '/automations': typeof AppAutomationsRoute
   '/dashboard': typeof AppDashboardRoute
   '/devices': typeof AppDevicesRoute
   '/dvr-nvr': typeof AppDvrNvrRoute
@@ -148,6 +156,7 @@ export interface FileRoutesById {
   '/onboarding': typeof OnboardingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/_app/ai-assistant': typeof AppAiAssistantRoute
+  '/_app/automations': typeof AppAutomationsRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/devices': typeof AppDevicesRoute
   '/_app/dvr-nvr': typeof AppDvrNvrRoute
@@ -167,6 +176,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/reset-password'
     | '/ai-assistant'
+    | '/automations'
     | '/dashboard'
     | '/devices'
     | '/dvr-nvr'
@@ -184,6 +194,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/reset-password'
     | '/ai-assistant'
+    | '/automations'
     | '/dashboard'
     | '/devices'
     | '/dvr-nvr'
@@ -202,6 +213,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/reset-password'
     | '/_app/ai-assistant'
+    | '/_app/automations'
     | '/_app/dashboard'
     | '/_app/devices'
     | '/_app/dvr-nvr'
@@ -264,6 +276,13 @@ declare module '@tanstack/react-router' {
       path: '/ai-assistant'
       fullPath: '/ai-assistant'
       preLoaderRoute: typeof AppAiAssistantRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/automations': {
+      id: '/_app/automations'
+      path: '/automations'
+      fullPath: '/automations'
+      preLoaderRoute: typeof AppAutomationsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/dashboard': {
@@ -341,6 +360,7 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppAiAssistantRoute: typeof AppAiAssistantRoute
+  AppAutomationsRoute: typeof AppAutomationsRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppDevicesRoute: typeof AppDevicesRoute
   AppDvrNvrRoute: typeof AppDvrNvrRoute
@@ -355,6 +375,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAiAssistantRoute: AppAiAssistantRoute,
+  AppAutomationsRoute: AppAutomationsRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppDevicesRoute: AppDevicesRoute,
   AppDvrNvrRoute: AppDvrNvrRoute,

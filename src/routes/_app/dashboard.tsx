@@ -1,12 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Thermometer, Droplets, Zap, ShieldCheck, ShieldAlert, Cpu, Workflow, Plus } from "lucide-react";
+import { Thermometer, Droplets, Zap, ShieldCheck, ShieldAlert, Cpu, Workflow, Plus, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useHousehold } from "@/lib/household";
 import { useDevices, useRooms, stateOf } from "@/lib/queries";
 import { DeviceCard } from "@/components/home/DeviceCard";
 import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/home/ui-states";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/dashboard")({
@@ -75,6 +76,32 @@ function Dashboard() {
         <Stat icon={secIssue ? ShieldAlert : ShieldCheck} label="Segurança" value={security.length === 0 ? "—" : secIssue ? "Atenção" : "Protegida"} tone={security.length === 0 ? "primary" : secIssue ? "warning" : "success"} />
         <Stat icon={Cpu} label="Dispositivos" value={`${online}/${list.length}`} hint="online" tone="violet" />
         <Stat icon={Workflow} label="Ações hoje" value={String(today.data ?? 0)} hint="registradas no histórico" />
+      </section>
+
+      {/* Banner de Rotinas & Automações com IA */}
+      <section className="mt-6 rounded-2xl border bg-gradient-to-r from-card via-card to-primary/10 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="size-10 rounded-xl bg-primary/15 text-primary grid place-items-center shrink-0">
+            <Sparkles className="size-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-bold text-foreground">Rotinas Domésticas com IA</h3>
+              <Badge variant="outline" className="text-[10px] text-cyan-400 border-cyan-500/30 font-mono">
+                AI Gateway
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Descreva sua rotina em texto livre e a IA mapeará os dispositivos e condições automaticamente.
+            </p>
+          </div>
+        </div>
+        <Button asChild size="sm" className="gap-2 shrink-0 font-semibold shadow-xs">
+          <Link to="/automations">
+            <Sparkles className="size-3.5 text-cyan-300" />
+            <span>Criar Rotina com IA</span>
+          </Link>
+        </Button>
       </section>
 
       <section className="mt-8">

@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -6,7 +6,7 @@ import {
   Sparkles, Mic, MicOff, Send, Volume2, VolumeX, RefreshCw, 
   Settings2, Brain, Activity, ShieldCheck, Terminal, Layers, 
   Trash2, Plus, Zap, Home, Eye, Camera, CheckCircle2, 
-  Flame, Radio, Power, Clock, Info, Play, Pause, Key, ExternalLink, Check, AlertTriangle
+  Flame, Radio, Power, Clock, Info, Play, Pause, Key, ExternalLink, Check, AlertTriangle, Workflow
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useHousehold } from "@/lib/household";
@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { AIProviderConfigModal } from "@/components/ai/AIProviderConfigModal";
+import { AiRoutineGeneratorDialog } from "@/components/automations/AiRoutineGeneratorDialog";
 import {
   AI_PROVIDERS,
   AIProviderId,
@@ -129,6 +130,8 @@ function AIAssistantPage() {
   const [newFact, setNewFact] = useState("");
   const [isMemoryModalOpen, setIsMemoryModalOpen] = useState(false);
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [isRoutineDialogOpen, setIsRoutineDialogOpen] = useState(false);
+  const [routinePrompt, setRoutinePrompt] = useState("");
   const [aiConfig, setAiConfig] = useState<AIConfig>(loadAIConfig);
   const [lastLatency, setLastLatency] = useState<number | null>(null);
 
@@ -644,6 +647,9 @@ function AIAssistantPage() {
           </TabsTrigger>
           <TabsTrigger value="ai-keys" className="gap-2 text-xs font-semibold">
             <Key className="size-3.5 text-cyan-400" /> Provedores & Chaves IA
+          </TabsTrigger>
+          <TabsTrigger value="routines" className="gap-2 text-xs font-semibold">
+            <Workflow className="size-3.5 text-indigo-400" /> Rotinas Domésticas IA
           </TabsTrigger>
         </TabsList>
 
@@ -1208,6 +1214,83 @@ function AIAssistantPage() {
             </div>
           </div>
         </TabsContent>
+
+        {/* ── TAB 6: ROTINAS DOMÉSTICAS COM IA ── */}
+        <TabsContent value="routines" className="m-0 space-y-4">
+          <div className="rounded-2xl border bg-gradient-to-br from-card via-card to-indigo-500/10 p-5 shadow-sm space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-xl bg-indigo-500/15 text-indigo-400 grid place-items-center">
+                  <Workflow className="size-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-foreground">Gerador de Rotinas Residenciais Mark-LV</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Descreva em texto livre o que você deseja automatizar e a IA criará as regras para seus dispositivos.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button asChild variant="outline" size="sm" className="text-xs gap-1.5">
+                  <Link to="/automations">
+                    <Workflow className="size-3.5" />
+                    <span>Ver Painel Completo de Automações</span>
+                  </Link>
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setRoutinePrompt("");
+                    setIsRoutineDialogOpen(true);
+                  }}
+                  className="text-xs font-bold gap-1.5 shadow-sm bg-indigo-600 hover:bg-indigo-500 text-white"
+                >
+                  <Sparkles className="size-3.5" />
+                  <span>Criar Nova Rotina com IA</span>
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+              {[
+                {
+                  title: "🌙 Modo Repouso & Dormir",
+                  desc: "Desliga a TV, apaga as luzes da sala e do corredor às 23h.",
+                  prompt: "Às 23h desligue a TV da sala, apague todas as luzes e verifique as câmeras.",
+                },
+                {
+                  title: "🎬 Experiência de Cinema",
+                  desc: "Reduz a iluminação para 20%, ajusta a TV e climatiza a sala.",
+                  prompt: "Modo cinema: reduza as luzes da sala para 20%, ligue a TV e coloque o som em 25%.",
+                },
+                {
+                  title: "🌅 Bom Dia Produtivo",
+                  desc: "Acende luz suave na cozinha e liga a TV às 07:00.",
+                  prompt: "Às 07:00 nos dias de semana, acenda a luz da cozinha em 80% e ligue a TV.",
+                },
+              ].map((item, idx) => (
+                <div key={idx} className="rounded-xl border bg-card p-3.5 space-y-2 flex flex-col justify-between">
+                  <div className="space-y-1">
+                    <span className="font-bold text-xs text-foreground">{item.title}</span>
+                    <p className="text-[11px] text-muted-foreground">{item.desc}</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-7 text-xs w-full mt-2 gap-1.5"
+                    onClick={() => {
+                      setRoutinePrompt(item.prompt);
+                      setIsRoutineDialogOpen(true);
+                    }}
+                  >
+                    <Sparkles className="size-3 text-cyan-400" />
+                    <span>Gerar esta Rotina</span>
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </TabsContent>
       </Tabs>
 
       {/* Dialog to Teach New Memory */}
@@ -1242,6 +1325,16 @@ function AIAssistantPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal do Gerador de Rotinas com IA */}
+      <AiRoutineGeneratorDialog
+        open={isRoutineDialogOpen}
+        onOpenChange={setIsRoutineDialogOpen}
+        devices={devices.data || []}
+        rooms={rooms.data || []}
+        householdId={current?.id || "default"}
+        initialPrompt={routinePrompt}
+      />
 
       {/* Universal AI Provider & API Key Modal */}
       <AIProviderConfigModal open={isAiModalOpen} onOpenChange={setIsAiModalOpen} />
