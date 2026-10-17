@@ -129,14 +129,14 @@ services:
         max-file: "5"
 
   # -------------------------------------------------------------------
-  # 5. Túnel HTTPS Seguro para Lovable (Cloudflare Quick Tunnel)
-  # Roteia tanto streaming ao vivo quanto gravações sob a mesma URL segura
+  # 5. Túnel HTTPS Fixo Permanente Cloudflare Zero Trust (casainteligenteai)
+  # Roteia tanto streaming ao vivo quanto gravações sob URL definitiva
   # -------------------------------------------------------------------
   tunnel:
     image: cloudflare/cloudflared:latest
     container_name: ci-tunnel
     restart: unless-stopped
-    command: tunnel --url http://ci-recorder:1985
+    command: tunnel --no-autoupdate run --token eyJhIjoiMzJjY2VjY2RiYjRhMmJkYjhkN2E4MjYyMTA0OTAzMzUiLCJ0IjoiNjhjNjc2MTMtNzJhNC00NWYwLTllOGEtNzUwMDg1ZGYyNzZjIiwicyI6Ik5tRTNaV0ZtTVdRdFpUYzVaaTAwWTJKaUxUZzJaamt0WkRnM05qazVPVEZrWW1ObSJ9
     depends_on:
       - recorder
     networks:
