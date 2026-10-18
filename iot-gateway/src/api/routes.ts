@@ -50,6 +50,14 @@ export function registerRoutes(
     }
   };
 
+  // 0. Plug-and-play LAN discovery (sweeps every local /24)
+  app.get("/network/scan", async (req) => {
+    const { scanNetwork } = await import("../network/scanner.js");
+    const q = req.query as { subnet?: string };
+    const subnets = q.subnet ? q.subnet.split(",").map((s) => s.trim().split(".").slice(0, 3).join(".")) : undefined;
+    return scanNetwork({ subnets });
+  });
+
   // 1. Health & Liveness
   app.get("/health", async () => {
     const mqttStatus = mqttTransport.getStatus();

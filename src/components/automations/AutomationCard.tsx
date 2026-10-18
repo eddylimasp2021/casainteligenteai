@@ -88,8 +88,8 @@ export function AutomationCard({
         <div className="flex items-start justify-between gap-2">
           <div className="space-y-1">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <Badge variant="outline" className={cn("text-[10px] uppercase font-bold", cat.badge)}>
-                {cat.label}
+              <Badge variant="outline" className={cn("text-[10px] uppercase font-bold", cat?.badge)}>
+                {cat?.label}
               </Badge>
               {automation.modelUsed && (
                 <Badge variant="secondary" className="text-[10px] font-mono gap-1 py-0 h-4 bg-muted/60">

@@ -538,7 +538,7 @@ describe("AIAssistantPage — Suite de Validação de Ícones & Prevenção de T
       expect(deleteButtons.length).toBeGreaterThan(0);
 
       // Clica para esquecer o primeiro fato
-      fireEvent.click(deleteButtons[0]);
+      fireEvent.click(deleteButtons[0]!);
 
       await waitFor(() => {
         expect(screen.queryByText(/Prefere luzes quentes e suaves no período noturno/i)).not.toBeInTheDocument();

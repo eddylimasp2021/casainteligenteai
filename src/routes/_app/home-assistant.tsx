@@ -140,7 +140,7 @@ function HomeAssistantPage() {
           .update({ state: { on: nextState === "on" } })
           .eq("id", ent.attributes.supabase_id);
         queryClient.invalidateQueries({ queryKey: ["devices"] });
-        logAction(current?.id, `Home Assistant: ${ent.attributes.friendly_name} -> ${nextState.toUpperCase()}`);
+        logAction(current?.id ?? "", `Home Assistant: ${ent.attributes.friendly_name} -> ${nextState.toUpperCase()}`);
       } catch (err) {
         console.error("Erro ao sincronizar dispositivo Supabase:", err);
       }

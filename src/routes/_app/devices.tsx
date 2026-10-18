@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { Cpu, Pencil, Plus, Trash2, Filter } from "lucide-react";
+import { Cpu, Pencil, Plus, Trash2, Filter, Radar } from "lucide-react";
+import { NetworkScanDialog } from "@/components/home/NetworkScanDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useHousehold } from "@/lib/household";
 import { useDevices, useRooms, logAction, type Device } from "@/lib/queries";
@@ -41,6 +42,7 @@ function DevicesPage() {
   const [availability, setAvailability] = useState("all");
   const [q, setQ] = useState("");
   const [form, setForm] = useState<{ open: boolean; device: Device | null }>({ open: false, device: null });
+  const [scanOpen, setScanOpen] = useState(false);
 
   if (devices.isLoading) return <LoadingState />;
   if (devices.error) return <ErrorState message="Não foi possível carregar os dispositivos." onRetry={() => devices.refetch()} />;
@@ -79,9 +81,14 @@ function DevicesPage() {
         description={`${devices.data?.length ?? 0} dispositivos cadastrados nesta residência.`}
         actions={
           canAdmin && (
-            <Button onClick={() => setForm({ open: true, device: null })}>
-              <Plus className="size-4" /> Novo dispositivo
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setScanOpen(true)}>
+                <Radar className="size-4" /> Varrer rede
+              </Button>
+              <Button onClick={() => setForm({ open: true, device: null })}>
+                <Plus className="size-4" /> Novo dispositivo
+              </Button>
+            </div>
           )
         }
       />
@@ -206,6 +213,14 @@ function DevicesPage() {
         </div>
       )}
 
+      {current && (
+        <NetworkScanDialog
+          open={scanOpen}
+          onOpenChange={setScanOpen}
+          householdId={current.id}
+          knownIps={(devices.data ?? []).map((d) => d.ip_address ?? "").filter(Boolean)}
+        />
+      )}
       {current && (
         <DeviceFormDialog
           open={form.open}
