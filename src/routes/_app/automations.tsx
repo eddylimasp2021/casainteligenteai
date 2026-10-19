@@ -35,6 +35,10 @@ export const Route = createFileRoute("/_app/automations")({
   head: () => ({
     meta: [
       { title: "Automações & Rotinas IA — Casa Inteligente AI" },
+      { property: "og:title", content: "Automações & Rotinas IA — Casa Inteligente AI" },
+      { property: "og:description", content: "Crie e gerencie rotinas de iluminação, climatização e segurança." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       {
         name: "description",
         content:
