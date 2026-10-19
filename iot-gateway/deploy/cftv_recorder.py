@@ -101,6 +101,7 @@ def run_ffmpeg_recorder(camera: dict):
                 "ffmpeg",
                 "-hide_banner",
                 "-loglevel", "warning",
+                "-fflags", "+genpts+discardcorrupt",
                 "-rtsp_transport", transport,
                 "-i", rtsp_url,
                 "-c:v", "copy",
@@ -238,8 +239,11 @@ def execute_lg_tv_command(ip="192.168.0.168", uri="", payload=None, client_key="
 # ---------------------------------------------------------------------------
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
+    allow_reuse_address = True
 
 class CFTVGatewayHandler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+    timeout = 30
     def send_cors_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, HEAD")
@@ -508,6 +512,8 @@ class CFTVGatewayHandler(BaseHTTPRequestHandler):
                         self.wfile.write(data)
                         remaining -= len(data)
                 return
+            except (BrokenPipeError, ConnectionResetError):
+                return
             except Exception as e:
                 print(f"[Streamer] Erro ao servir range {range_header}: {e}", flush=True)
 
@@ -519,8 +525,11 @@ class CFTVGatewayHandler(BaseHTTPRequestHandler):
         self.send_cors_headers()
         self.end_headers()
 
-        with open(full_path, "rb") as f:
-            shutil.copyfileobj(f, self.wfile, length=65536)
+        try:
+            with open(full_path, "rb") as f:
+                shutil.copyfileobj(f, self.wfile, length=65536)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     # -----------------------------------------------------------------------
     # Reverse Proxy to go2rtc
@@ -548,6 +557,8 @@ class CFTVGatewayHandler(BaseHTTPRequestHandler):
                 self.end_headers()
 
                 shutil.copyfileobj(resp, self.wfile, length=65536)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
         except urllib.error.HTTPError as e:
             self.send_response(e.code)
             self.send_cors_headers()

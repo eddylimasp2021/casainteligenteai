@@ -7,17 +7,24 @@ echo ==========================================================
 echo        HOMEPULSE AI - GATEWAY DE CAMERAS CFTV
 echo ==========================================================
 echo.
-echo [1/3] Verificando Docker Desktop...
+echo [1/3] Verificando Docker Desktop e motor de containers...
 
+:: Teste rapido: se o Docker ja esta 100% responsivo, pula direto para os servicos
+docker version >nul 2>&1
+if "%ERRORLEVEL%"=="0" (
+    echo [OK] Motor do Docker ja esta operacional e pronto!
+    goto DOCKER_READY
+)
+
+:: Verifica se a GUI do Docker Desktop esta aberta
 tasklist /FI "IMAGENAME eq Docker Desktop.exe" 2>NUL | find /I /N "Docker Desktop.exe">NUL
-if "%ERRORLEVEL%"=="0" goto DOCKER_RUNNING
+if "%ERRORLEVEL%"=="0" goto CHECK_ENGINE
 
-echo [i] Docker Desktop fechado. Iniciando o Docker Desktop agora...
+echo [i] Docker Desktop fechado. Iniciando agora...
 start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
 echo Aguarde enquanto o Docker inicializa no Windows...
 
 :CHECK_ENGINE
-echo [i] Verificando se o motor Linux do Docker esta respondendo...
 set /a TRIES=0
 
 :RETRY_ENGINE
@@ -28,23 +35,40 @@ if "%ERRORLEVEL%"=="0" (
 )
 
 set /a TRIES=%TRIES%+1
-if %TRIES% GEQ 10 (
+if %TRIES% GEQ 15 (
     echo.
-    echo [!] AVISO: O motor do Docker esta demorando para responder ou travou.
-    echo [i] Por favor, clique com botao direito no icone da baleia do Docker (proximo ao relogio)
-    echo     e escolha "Restart Docker Desktop", depois execute este arquivo novamente.
-    echo.
-    pause
-    exit /b 1
+    echo [!] AVISO: O motor do Docker travou ou esta em estado zumbi no Windows.
+    echo [i] Executando restauracao automatica limpa (encerra processos presos e reinicia)...
+    taskkill /F /IM "Docker Desktop.exe" /IM "com.docker.backend.exe" /IM "com.docker.proxy.exe" /IM "com.docker.build.exe" /IM "docker-agent.exe" /IM "wsl.exe" /IM "wslhost.exe" >nul 2>&1
+    wsl --shutdown >nul 2>&1
+    timeout /t 3 /nobreak >nul
+    echo [i] Subindo Docker Desktop limpo...
+    start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+    set /a TRIES=0
+    goto WAIT_CLEAN_RESTART
 )
 
-echo Aguardando inicializacao completa do motor do Docker (%TRIES%/10)...
+echo Aguardando motor do Docker (%TRIES%/15)...
 timeout /t 3 /nobreak >nul
 goto RETRY_ENGINE
 
-:DOCKER_RUNNING
-echo [OK] Docker Desktop ja esta aberto no Windows.
-goto CHECK_ENGINE
+:WAIT_CLEAN_RESTART
+set /a TRIES=%TRIES%+1
+docker version >nul 2>&1
+if "%ERRORLEVEL%"=="0" (
+    echo [OK] Motor do Docker restaurado com sucesso!
+    goto DOCKER_READY
+)
+if %TRIES% GEQ 20 (
+    echo.
+    echo [X] Erro critico: O Docker Desktop nao respondeu apos reinicializacao.
+    echo     Verifique as configuracoes do Docker Desktop ou reinicie o PC.
+    pause
+    exit /b 1
+)
+echo Aguardando inicializacao limpa do Docker (%TRIES%/20)...
+timeout /t 3 /nobreak >nul
+goto WAIT_CLEAN_RESTART
 
 :DOCKER_READY
 echo.
