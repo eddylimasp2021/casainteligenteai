@@ -42,6 +42,10 @@ export const Route = createFileRoute("/_app/home-assistant")({
   head: () => ({
     meta: [
       { title: "Home Assistant Core — Casa Inteligente AI" },
+      { property: "og:title", content: "Home Assistant Core — Casa Inteligente AI" },
+      { property: "og:description", content: "Painéis, entidades e automações Home Assistant para sua residência." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { name: "description", content: "Painéis Lovelace, Ferramentas de Desenvolvedor, Automações e Ajudantes do Home Assistant adaptados para Casa Inteligente AI." },
     ],
   }),

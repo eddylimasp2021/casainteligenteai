@@ -34,6 +34,10 @@ export const Route = createFileRoute("/_app/ai-assistant")({
   head: () => ({
     meta: [
       { title: "Assistente IA — Mark-LV | Casa Inteligente AI" },
+      { property: "og:title", content: "Assistente IA — Mark-LV | Casa Inteligente AI" },
+      { property: "og:description", content: "Assistente pessoal de voz e automação residencial." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { name: "description", content: "Assistente pessoal inteligente de voz e automação inspirado no Mark-LV (JARVIS)." },
     ],
   }),

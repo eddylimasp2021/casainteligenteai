@@ -1,5 +1,7 @@
 # Roadmap — Casa Inteligente AI (HomePulse AI)
 
+- [x] Tela de câmeras — ocultar menu lateral com botão para reabrir e mosaico padrão de seis canais
+
 - [x] Fase 1 — Base: Cloud, logo/tema, login, onboarding, multi-residência, layout, dashboard, cômodos, dispositivos, histórico, demo
 - [ ] Fase 2 — Cenas e automações
 - [ ] Fase 3 — Assistente IA

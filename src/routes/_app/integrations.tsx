@@ -18,6 +18,10 @@ export const Route = createFileRoute("/_app/integrations")({
   head: () => ({
     meta: [
       { title: "Integrações IoT — Casa Inteligente AI" },
+      { property: "og:title", content: "Integrações IoT — Casa Inteligente AI" },
+      { property: "og:description", content: "Gerencie as integrações dos dispositivos da sua casa inteligente." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { name: "description", content: "Gerencie integrações com MQTT, Home Assistant, Zigbee, Matter, Google Gemini e nós ESP32." },
     ],
   }),

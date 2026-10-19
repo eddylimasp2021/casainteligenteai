@@ -9,6 +9,7 @@ import {
   ShieldAlert,
   Play,
   Grid2X2,
+  Columns3,
   Square,
   Grid3X3,
   Maximize2,
@@ -79,12 +80,16 @@ export const Route = createFileRoute("/_app/dvr-nvr")({
         content:
           "Central profissional de vigilância IP com mosaico ao vivo, controle PTZ, reprodução 24h, analíticos de inteligência artificial e gerenciamento de armazenamento NVR.",
       },
+      { property: "og:title", content: "Videomonitoramento DVR / NVR | Casa Inteligente AI" },
+      { property: "og:description", content: "Central de câmeras IP com mosaico ao vivo, controle PTZ e gerenciamento de gravações." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: DvrNvrPage,
 });
 
-type GridMode = "1x1" | "2x2" | "3x3" | "1+5";
+type GridMode = "1x1" | "2x2" | "3x2" | "3x3" | "1+5";
 
 const CAMERAS_STORAGE_KEY = "homepulse_dvr_cameras_v1";
 const DISKS_STORAGE_KEY = "homepulse_dvr_disks_v1";
@@ -376,7 +381,7 @@ function DvrNvrPage() {
   }, [gatewayUrl]);
 
   // Grid layout
-  const [gridMode, setGridMode] = useState<GridMode>("2x2");
+  const [gridMode, setGridMode] = useState<GridMode>("3x2");
   const [focusedCameraId, setFocusedCameraId] = useState<string>(cameras[0]?.id || "cam-real-01");
 
   // Stream Quality
@@ -598,6 +603,8 @@ function DvrNvrPage() {
     displayedCameras = found ? [found] : gridChannels.slice(0, 1);
   } else if (gridMode === "2x2") {
     displayedCameras = gridChannels.slice(0, 4);
+  } else if (gridMode === "3x2") {
+    displayedCameras = gridChannels.slice(0, 6);
   } else if (gridMode === "3x3") {
     displayedCameras = gridChannels.slice(0, 9);
   }
@@ -821,6 +828,17 @@ function DvrNvrPage() {
                   title="Mosaico 4 canais (2x2)"
                 >
                   <Grid2X2 className="size-3.5" />
+                </Button>
+                <Button
+                  variant={gridMode === "3x2" ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => setGridMode("3x2")}
+                  className="h-7 w-8 p-0"
+                  title="Mosaico 6 canais (3x2)"
+                  aria-label="Mosaico 6 canais (3x2)"
+                  aria-pressed={gridMode === "3x2"}
+                >
+                  <Columns3 className="size-3.5" />
                 </Button>
                 <Button
                   variant={gridMode === "3x3" ? "secondary" : "ghost"}

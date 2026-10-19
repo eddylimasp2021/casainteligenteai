@@ -1,6 +1,6 @@
-import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
-import { Home, LayoutGrid, Cpu, History, Settings, LogOut, Wifi, WifiOff, Check, ChevronsUpDown, Plus, Radio, Server, Cctv, Sparkles, SlidersHorizontal, Workflow } from "lucide-react";
+import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { Home, LayoutGrid, Cpu, History, Settings, LogOut, Wifi, WifiOff, Check, ChevronsUpDown, Plus, Radio, Server, Cctv, Sparkles, SlidersHorizontal, Workflow, PanelLeftOpen, PanelLeftClose } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { HouseholdProvider, useHousehold } from "@/lib/household";
@@ -40,6 +40,9 @@ function Shell() {
   const navigate = useNavigate();
   const online = useOnline();
   const { user } = useAuth();
+  const pathname = useRouterState({ select: (router) => router.location.pathname });
+  const [menuOverride, setMenuOverride] = useState<{ pathname: string; open: boolean } | null>(null);
+  const menuOpen = menuOverride?.pathname === pathname ? menuOverride.open : pathname !== "/dvr-nvr";
 
   useEffect(() => { if (!loading && households.length === 0) navigate({ to: "/onboarding", replace: true }); }, [loading, households.length, navigate]);
   if (loading || !current) return <LoadingState />;
@@ -47,7 +50,7 @@ function Shell() {
   return (
     <div className="min-h-screen md:flex">
       {/* Sidebar: compact on tablet, full on desktop */}
-      <aside className="sticky top-0 hidden h-screen shrink-0 flex-col border-r bg-sidebar backdrop-blur-xl md:flex md:w-20 lg:w-64">
+      <aside id="app-side-menu" className={`sticky top-0 hidden h-screen shrink-0 flex-col border-r bg-sidebar backdrop-blur-xl md:w-20 lg:w-64 ${menuOpen ? "md:flex" : ""}`}>
         <div className="p-4 lg:p-5"><Logo withText={false} className="lg:hidden justify-center" /><Logo className="hidden lg:flex" /></div>
         <nav className="flex-1 space-y-1 px-3" aria-label="Principal">
           {NAV.map(({ to, label, icon: Icon }) => (
@@ -67,6 +70,9 @@ function Shell() {
 
       <div className="min-w-0 flex-1 pb-24 md:pb-0">
         <header className="sticky top-0 z-30 flex items-center gap-3 border-b bg-background/70 px-4 py-3 backdrop-blur-xl sm:px-6">
+          <Button variant="ghost" size="icon" className="hidden shrink-0 md:inline-flex" aria-label={menuOpen ? "Ocultar menu lateral" : "Mostrar menu lateral"} title={menuOpen ? "Ocultar menu lateral" : "Mostrar menu lateral"} aria-expanded={menuOpen} aria-controls="app-side-menu" onClick={() => setMenuOverride({ pathname, open: !menuOpen })}>
+            {menuOpen ? <PanelLeftClose className="size-5" /> : <PanelLeftOpen className="size-5" />}
+          </Button>
           <Logo withText={false} className="md:hidden" />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

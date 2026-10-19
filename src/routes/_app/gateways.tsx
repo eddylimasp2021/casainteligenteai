@@ -16,6 +16,10 @@ export const Route = createFileRoute("/_app/gateways")({
   head: () => ({
     meta: [
       { title: "Gateways IoT — Casa Inteligente AI" },
+      { property: "og:title", content: "Gateways IoT — Casa Inteligente AI" },
+      { property: "og:description", content: "Gerencie os gateways conectados à sua residência." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { name: "description", content: "Gerencie os nós de gateway de hardware conectados à sua residência." },
     ],
   }),
