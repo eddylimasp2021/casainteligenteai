@@ -8,3 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Keep route-aware side navigation visibility in the shared app shell, with an always-accessible header toggle, so camera viewing can use the full content width without duplicating navigation.
