@@ -636,6 +636,9 @@ function DvrNvrPage() {
     return [];
   });
 
+  // Alias for backward compatibility
+  const displayedCameras = orderedSlots;
+
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
@@ -1032,7 +1035,7 @@ function DvrNvrPage() {
 
         {/* TAB 1: Live Mosaic View */}
         <TabsContent value="live" className="m-0 space-y-4">
-          {displayedCameras.length === 0 ? (
+          {gridChannels.length === 0 ? (
             <div className="text-center py-16 border rounded-xl border-dashed">
               <Cctv className="size-12 mx-auto text-muted-foreground/50 mb-3" />
               <h3 className="text-lg font-semibold">Nenhuma câmera cadastrada</h3>
