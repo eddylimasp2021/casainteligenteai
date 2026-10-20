@@ -100,6 +100,42 @@ const AI_EVENTS_STORAGE_KEY = "homepulse_dvr_events_v1";
 const STORAGE_CONFIG_KEY = "homepulse_dvr_storage_config_v1";
 const GRID_ORDER_STORAGE_KEY = "homepulse_dvr_grid_order_v2";
 
+// Helper to identify physical cameras and prevent duplicate entries (e.g. 240, 198, 139)
+function getCanonicalCameraKey(cam: { id?: string; name?: string; ip?: string; streamName?: string }): string {
+  const ip = (cam.ip || "").trim();
+  const name = (cam.name || "").toLowerCase();
+  const stream = (cam.streamName || "").toLowerCase();
+  const id = (cam.id || "").toLowerCase();
+
+  if (
+    ip.includes("192.168.0.240") ||
+    name.includes("240") ||
+    name.includes("tripla") ||
+    stream.includes("240") ||
+    id.includes("240")
+  ) {
+    return "cam_240";
+  }
+  if (
+    ip.includes("192.168.0.198") ||
+    name.includes("198") ||
+    stream.includes("198") ||
+    id.includes("198")
+  ) {
+    return "cam_198";
+  }
+  if (
+    ip.includes("192.168.0.139") ||
+    name.includes("garagem") ||
+    stream.includes("garagem") ||
+    id.includes("garagem") ||
+    id === "cam-real-01"
+  ) {
+    return "cam_garagem";
+  }
+  return id || ip || name;
+}
+
 function DvrNvrPage() {
   // Storage Configuration state (Where to save recordings and snapshots - strictly Drive D:)
   const [storageConfig, setStorageConfig] = useState<StorageConfig>(() => {
@@ -128,75 +164,72 @@ function DvrNvrPage() {
     return INITIAL_STORAGE_CONFIG;
   });
 
-  // Cameras state with strict deduplication by physical IP
+// Cameras state with strict canonical deduplication (Guarantees camera 240 is NEVER repeated)
   const [cameras, setCameras] = useState<IpCamera[]>(() => {
     try {
       const saved = localStorage.getItem(CAMERAS_STORAGE_KEY);
       let parsed = saved ? (JSON.parse(saved) as IpCamera[]) : [...INITIAL_CAMERAS];
 
-      // 1. Initial deduplication by IP
-      const seen = new Set<string>();
-      const deduped: IpCamera[] = [];
+      // Canonical deduplication: group by physical camera
+      const canonicalMap = new Map<string, IpCamera>();
       for (const c of parsed) {
-        const cleanIp = (c.ip || "").trim();
-        if (cleanIp && cleanIp !== "127.0.0.1" && cleanIp !== "localhost") {
-          if (seen.has(cleanIp)) continue;
-          seen.add(cleanIp);
+        const key = getCanonicalCameraKey(c);
+        if (!canonicalMap.has(key)) {
+          canonicalMap.set(key, c);
         }
-        deduped.push(c);
       }
-      parsed = deduped;
 
       // Ensure Garagem (192.168.0.139) is present
-      if (!parsed.some((c) => c.ip === "192.168.0.139" || c.streamName === "garagem_rua")) {
+      if (!canonicalMap.has("cam_garagem")) {
         const init139 = INITIAL_CAMERAS.find((c) => c.ip === "192.168.0.139") || INITIAL_CAMERAS[0]!;
-        parsed.unshift(init139);
+        canonicalMap.set("cam_garagem", init139);
       }
 
       // Ensure 192.168.0.240 is present exactly once
-      if (!parsed.some((c) => c.ip === "192.168.0.240" || c.streamName === "cam_192_168_0_240")) {
+      if (!canonicalMap.has("cam_240")) {
         const init240 = INITIAL_CAMERAS.find((c) => c.ip === "192.168.0.240") || INITIAL_CAMERAS[1]!;
-        parsed.push(init240);
+        canonicalMap.set("cam_240", init240);
       }
 
       // Ensure 192.168.0.198 is present exactly once
-      if (!parsed.some((c) => c.ip === "192.168.0.198" || c.streamName === "cam_192_168_0_198")) {
-        const init198 = INITIAL_CAMERAS.find((c) => c.ip === "192.168.0.198")!;
-        if (init198) parsed.push(init198);
+      if (!canonicalMap.has("cam_198")) {
+        const init198 = INITIAL_CAMERAS.find((c) => c.ip === "192.168.0.198");
+        if (init198) canonicalMap.set("cam_198", init198);
       }
 
-      // Final deduplication pass to guarantee no physical camera is ever repeated
-      const finalSeen = new Set<string>();
-      const finalCameras: IpCamera[] = [];
-      for (const c of parsed) {
-        const cleanIp = (c.ip || "").trim();
-        if (cleanIp && cleanIp !== "127.0.0.1" && cleanIp !== "localhost") {
-          if (finalSeen.has(cleanIp)) continue;
-          finalSeen.add(cleanIp);
-        }
-        finalCameras.push(c);
-      }
-
-      const normalized = finalCameras.map((c) => {
-        if (c.ip === "192.168.0.139" || (c.name && c.name.toLowerCase().includes("garagem"))) {
+      const normalized = Array.from(canonicalMap.values()).map((c) => {
+        const key = getCanonicalCameraKey(c);
+        if (key === "cam_garagem") {
           return {
             ...c,
+            id: "cam-real-garagem",
+            name: "Garagem Rua",
+            roomName: "Garagem / Rua",
+            ip: "192.168.0.139",
             streamName: "garagem_rua",
             activeProtocol: "WebRTC" as const,
           };
         }
-        if (c.ip === "192.168.0.240" || (c.name && c.name.toLowerCase().includes("240"))) {
+        if (key === "cam_240") {
           return {
             ...c,
+            id: "cam-real-240",
+            name: "Câmera Tripla Multi-Lente (3 Visões)",
+            roomName: "Vigilância Externa",
+            ip: "192.168.0.240",
             streamName: "cam_192_168_0_240",
             activeProtocol: "WebRTC" as const,
             lensCount: 3,
             splitLensesIntoGrid: true,
           };
         }
-        if (c.ip === "192.168.0.198" || (c.name && c.name.toLowerCase().includes("198"))) {
+        if (key === "cam_198") {
           return {
             ...c,
+            id: "cam-real-198",
+            name: "Câmera IP (192.168.0.198)",
+            roomName: "Área Externa",
+            ip: "192.168.0.198",
             streamName: "cam_192_168_0_198",
             activeProtocol: "WebRTC" as const,
           };
@@ -204,7 +237,7 @@ function DvrNvrPage() {
         return c;
       });
 
-      // Save the cleaned-up unique camera list immediately
+      // Save the cleaned-up list immediately to purge legacy duplicate entries
       localStorage.setItem(CAMERAS_STORAGE_KEY, JSON.stringify(normalized));
       return normalized;
     } catch (e) {
@@ -570,58 +603,64 @@ function DvrNvrPage() {
     toast.success("Gravação Manual Emergencial ativada em todos os canais simultaneamente.");
   };
 
-  // Expand multi-lens cameras into individual grid channels without duplicates
+// Expand multi-lens cameras into individual grid channels without duplicates
   const gridChannels = useMemo(() => {
     const list: IpCamera[] = [];
-    const seenIps = new Set<string>();
+    const seenCanonical = new Set<string>();
 
     for (const cam of cameras) {
-      const cleanIp = (cam.ip || "").trim();
-      if (cleanIp && cleanIp !== "127.0.0.1" && cleanIp !== "localhost") {
-        if (seenIps.has(cleanIp)) continue;
-        seenIps.add(cleanIp);
+      const canonicalKey = getCanonicalCameraKey(cam);
+      // Strictly prevent the same canonical camera (e.g. cam_240) from being processed twice
+      if (seenCanonical.has(canonicalKey)) {
+        continue;
       }
+      seenCanonical.add(canonicalKey);
 
-      const total =
-        cam.lensCount ??
-        (cam.ip === "192.168.0.240" || cam.name.toLowerCase().includes("240") ? 3 : 1);
-      const shouldSplit = cam.splitLensesIntoGrid ?? (total > 1);
-
-      const effectiveStream =
-        cam.streamName ||
-        (cam.ip === "192.168.0.240" || cam.name.includes("240")
-          ? "cam_192_168_0_240"
-          : cam.ip === "192.168.0.198" || cam.name.includes("198")
-          ? "cam_192_168_0_198"
-          : cam.ip === "192.168.0.139" || cam.name.toLowerCase().includes("garagem")
-          ? "garagem_rua"
-          : cam.id);
-
-      if (total > 1 && shouldSplit) {
-        for (let lens = 1; lens <= total; lens++) {
+      if (canonicalKey === "cam_240") {
+        // Câmera 240 Tripla SEMPRE e OBRIGATORIAMENTE gera EXATAMENTE 3 canais (Lente 1, Lente 2, Lente 3)
+        for (let lens = 1; lens <= 3; lens++) {
           const label =
-            total === 3
-              ? lens === 1
-                ? "Lente 1: Superior"
-                : lens === 2
-                ? "Lente 2: Central"
-                : "Lente 3: Inferior"
-              : `Lente ${lens}`;
+            lens === 1
+              ? "Lente 1: Superior"
+              : lens === 2
+              ? "Lente 2: Central"
+              : "Lente 3: Inferior";
 
           list.push({
             ...cam,
-            id: `${cam.id}__lens_${lens}`,
-            name: `${cam.name} — ${label}`,
+            id: `cam_240__lens_${lens}`,
+            name: `Câmera Tripla — ${label}`,
+            roomName: "Vigilância Externa",
+            ip: "192.168.0.240",
             selectedLens: lens,
-            lensCount: total,
-            streamName: effectiveStream,
+            lensCount: 3,
+            streamName: "cam_192_168_0_240",
+            activeProtocol: "WebRTC",
+            splitLensesIntoGrid: true,
           });
         }
-      } else {
+      } else if (canonicalKey === "cam_198") {
         list.push({
           ...cam,
-          streamName: effectiveStream,
+          id: "cam_198__main",
+          name: "Câmera IP (192.168.0.198)",
+          roomName: "Área Externa",
+          ip: "192.168.0.198",
+          streamName: "cam_192_168_0_198",
+          activeProtocol: "WebRTC",
         });
+      } else if (canonicalKey === "cam_garagem") {
+        list.push({
+          ...cam,
+          id: "cam_garagem__main",
+          name: "Garagem Rua",
+          roomName: "Garagem / Rua",
+          ip: "192.168.0.139",
+          streamName: "garagem_rua",
+          activeProtocol: "WebRTC",
+        });
+      } else {
+        list.push(cam);
       }
     }
     return list;
@@ -672,7 +711,7 @@ function DvrNvrPage() {
       const id = gridOrder[i];
       if (id && id.startsWith("empty_")) {
         slots.push(null);
-      } else if (id && channelMap.has(id)) {
+      } else if (id && channelMap.has(id) && !usedIds.has(id)) {
         slots.push(channelMap.get(id)!);
         usedIds.add(id);
       }
