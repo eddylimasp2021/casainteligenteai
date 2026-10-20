@@ -24,6 +24,7 @@ import {
   Image as ImageIcon,
   Circle,
   Layers,
+  Users,
 } from "lucide-react";
 import type { IpCamera } from "@/types/dvr-nvr";
 import { Button } from "@/components/ui/button";
@@ -78,6 +79,48 @@ export function RealCameraPlayer({
   const [isMuted, setIsMuted] = useState(true);
   const [volume, setVolume] = useState<number>(0.8);
   const [hasAudioTrack, setHasAudioTrack] = useState<boolean>(false);
+
+  // Face ID Real-Time Bounding Box Overlay State
+  const [showFaceOverlay, setShowFaceOverlay] = useState<boolean>(true);
+  const [detectedFaces, setDetectedFaces] = useState<
+    Array<{
+      isRecognized: boolean;
+      personName: string;
+      confidence: number;
+      box: { x: number; y: number; width: number; height: number };
+    }>
+  >([]);
+
+  useEffect(() => {
+    if (streamState !== "playing" || !showFaceOverlay) {
+      setDetectedFaces([]);
+      return;
+    }
+
+    let isMounted = true;
+    const streamTarget = camera.streamName || camera.id;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch(
+          `${gatewayBase}/api/face/detect?camera=${streamTarget}&name=${encodeURIComponent(camera.name)}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && data.faces) {
+            setDetectedFaces(data.faces);
+          }
+        }
+      } catch {
+        // Silent catch for network jitter
+      }
+    }, 2200);
+
+    return () => {
+      isMounted = false;
+      clearInterval(pollInterval);
+    };
+  }, [streamState, showFaceOverlay, camera.streamName, camera.id, camera.name, gatewayBase]);
   const [isTalking, setIsTalking] = useState<boolean>(false);
   const [isIntercomOpen, setIsIntercomOpen] = useState<boolean>(false);
   const [micLevel, setMicLevel] = useState<number>(0);
@@ -964,6 +1007,42 @@ export function RealCameraPlayer({
           />
         )}
 
+        {/* Live Face ID Bounding Box Overlay */}
+        {showFaceOverlay && detectedFaces.length > 0 && (
+          <div className="absolute inset-0 pointer-events-none z-20 overflow-hidden">
+            {detectedFaces.map((f, idx) => (
+              <div
+                key={idx}
+                style={{
+                  left: `${f.box.x * 100}%`,
+                  top: `${f.box.y * 100}%`,
+                  width: `${f.box.width * 100}%`,
+                  height: `${f.box.height * 100}%`,
+                }}
+                className={`absolute border-2 rounded-md transition-all duration-300 ${
+                  f.isRecognized
+                    ? "border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.7)] bg-emerald-500/10"
+                    : "border-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.7)] bg-amber-500/15 animate-pulse"
+                }`}
+              >
+                {/* Floating Face ID Tag Badge */}
+                <div
+                  className={`absolute -top-6 left-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold text-white shadow-md whitespace-nowrap ${
+                    f.isRecognized
+                      ? "bg-emerald-600/90 border border-emerald-400"
+                      : "bg-amber-600/90 border border-amber-400"
+                  }`}
+                >
+                  <Users className="size-2.5" />
+                  <span>
+                    {f.isRecognized ? f.personName : "Rosto Não Cadastrado"} ({Math.round(f.confidence * 100)}%)
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Floating status pill when WebRTC is awaiting keyframes */}
         {streamState === "awaiting_frames" && (
           <div className="absolute top-10 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/80 backdrop-blur-md border border-emerald-500/40 text-white text-[11px] shadow-lg animate-pulse pointer-events-none">
@@ -1105,6 +1184,24 @@ export function RealCameraPlayer({
                 <span>{getLensLabel(activeLens, totalLenses)}</span>
               </button>
             )}
+
+            {/* Live Face ID Detection Toggle */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowFaceOverlay((prev) => !prev);
+              }}
+              className={`pointer-events-auto flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-sans font-bold transition-all cursor-pointer shadow-sm active:scale-95 ${
+                showFaceOverlay
+                  ? "bg-emerald-500/25 text-emerald-300 border border-emerald-500/60 hover:bg-emerald-500/40"
+                  : "bg-black/50 text-neutral-400 border border-white/20 hover:text-white"
+              }`}
+              title="Ativar/Desativar detecção facial e caixas delimitadoras ao vivo"
+            >
+              <Users className="size-3 text-emerald-400" />
+              <span>Face ID {showFaceOverlay ? "ON" : "OFF"}</span>
+            </button>
 
             {isRecording && (
               <span className="flex items-center gap-1.5 font-bold text-rose-400 bg-rose-500/20 border border-rose-500/40 px-2 py-0.5 rounded text-[10px] animate-pulse">

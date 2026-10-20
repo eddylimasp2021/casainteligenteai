@@ -361,6 +361,11 @@ class CFTVGatewayHandler(BaseHTTPRequestHandler):
             self.handle_frame_jpeg(query)
             return
 
+        # 4.6 API: Reverse Proxy to Face AI engine
+        if path.startswith("/api/face"):
+            self.proxy_to_face_ai("GET")
+            return
+
         # 5. Fallback: Reverse Proxy to go2rtc
         self.proxy_to_go2rtc("GET")
 
@@ -418,6 +423,11 @@ class CFTVGatewayHandler(BaseHTTPRequestHandler):
                 self.send_json_response({"ok": False, "error": str(e)})
             return
 
+        # Reverse Proxy to Face AI engine
+        if path.startswith("/api/face"):
+            self.proxy_to_face_ai("POST")
+            return
+
         # Forward all other POSTs (e.g. WebRTC SDP negotiation) to go2rtc
         self.proxy_to_go2rtc("POST")
 
@@ -425,7 +435,40 @@ class CFTVGatewayHandler(BaseHTTPRequestHandler):
         self.proxy_to_go2rtc("PUT")
 
     def do_DELETE(self):
+        parsed = urllib.parse.urlparse(self.path)
+        if parsed.path.startswith("/api/face"):
+            self.proxy_to_face_ai("DELETE")
+            return
         self.proxy_to_go2rtc("DELETE")
+
+    def proxy_to_face_ai(self, method: str):
+        target_url = f"http://ci-face-ai:5000{self.path}"
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length) if content_length > 0 else None
+            req = urllib.request.Request(target_url, data=body, method=method)
+            for k, v in self.headers.items():
+                if k.lower() not in ("host", "content-length"):
+                    req.add_header(k, v)
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                self.send_response(resp.status)
+                for k, v in resp.headers.items():
+                    if k.lower() not in ("transfer-encoding", "content-length"):
+                        self.send_header(k, v)
+                data = resp.read()
+                self.send_header("Content-Length", str(len(data)))
+                self.send_cors_headers()
+                self.end_headers()
+                self.wfile.write(data)
+        except urllib.error.HTTPError as e:
+            err_data = e.read()
+            self.send_response(e.code)
+            self.send_header("Content-Length", str(len(err_data)))
+            self.send_cors_headers()
+            self.end_headers()
+            self.wfile.write(err_data)
+        except Exception as e:
+            self.send_json_response({"error": f"Face AI unreachable: {e}"}, status=502)
 
     # -----------------------------------------------------------------------
     # API: List Recordings

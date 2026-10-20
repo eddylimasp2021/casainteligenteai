@@ -148,6 +148,37 @@ services:
         max-size: "10m"
         max-file: "3"
 
+
+  # -------------------------------------------------------------------
+  # 6. Motor de Reconhecimento Facial I.A. (Face ID Local 24/7)
+  # -------------------------------------------------------------------
+  face-ai:
+    build:
+      context: ./face-ai
+      dockerfile: Dockerfile
+    container_name: ci-face-ai
+    restart: always
+    environment:
+      - PORT=5000
+      - GO2RTC_HOST=ci-go2rtc
+      - GO2RTC_PORT=1984
+      - RECORDINGS_DIR=/recordings
+    volumes:
+      - "D:/Gravacoes_CFTV:/recordings:rw"
+      - ./face-ai/main.py:/app/main.py:ro
+    ports:
+      - "5000:5000"
+    depends_on:
+      go2rtc:
+        condition: service_healthy
+    networks:
+      - ci-iot-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   mosquitto-data:
   mosquitto-log:

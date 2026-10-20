@@ -14,6 +14,9 @@ import {
   Eye,
   Check,
   RefreshCw,
+  Send,
+  Smartphone,
+  ExternalLink,
 } from "lucide-react";
 import type { AuthorizedPerson, IpCamera } from "@/types/dvr-nvr";
 import {
@@ -69,6 +72,53 @@ export function FacialRecognitionDialog({
   const [matchThreshold, setMatchThreshold] = useState<number>(85);
   const [alertUnknown, setAlertUnknown] = useState<boolean>(true);
   const [saveFaceSnapshots, setSaveFaceSnapshots] = useState<boolean>(true);
+
+  // Telegram & WhatsApp Notification States
+  const [telegramToken, setTelegramToken] = useState(() => {
+    try {
+      return localStorage.getItem("homepulse_dvr_tg_token_v1") || "";
+    } catch {
+      return "";
+    }
+  });
+  const [telegramChatId, setTelegramChatId] = useState(() => {
+    try {
+      return localStorage.getItem("homepulse_dvr_tg_chat_v1") || "";
+    } catch {
+      return "";
+    }
+  });
+  const [isSendingTest, setIsSendingTest] = useState(false);
+
+  const handleTestNotification = async () => {
+    if (!telegramToken.trim() || !telegramChatId.trim()) {
+      toast.error("Preencha o Token do Bot e o Chat ID do Telegram antes de testar.");
+      return;
+    }
+    setIsSendingTest(true);
+    try {
+      const res = await fetch(`${gatewayUrl}/api/face/notify_test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          telegram_token: telegramToken.trim(),
+          telegram_chat_id: telegramChatId.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        localStorage.setItem("homepulse_dvr_tg_token_v1", telegramToken.trim());
+        localStorage.setItem("homepulse_dvr_tg_chat_v1", telegramChatId.trim());
+        toast.success("Mensagem de teste enviada com sucesso no seu Telegram!");
+      } else {
+        toast.error(`Falha ao enviar: ${data.error || "Verifique o Token ou Chat ID"}`);
+      }
+    } catch (e: any) {
+      toast.error(`Erro de conexão com o Gateway de I.A.: ${e?.message || e}`);
+    } finally {
+      setIsSendingTest(false);
+    }
+  };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -496,9 +546,67 @@ export function FacialRecognitionDialog({
                 <div className="flex items-center justify-between pt-2 border-t">
                   <div>
                     <p className="font-semibold text-foreground">Salvar Foto de Cada Rosto no Disco D:</p>
-                    <p className="text-[11px] text-muted-foreground">Armazena na pasta D:\Gravacoes_CFTV\Snapshots\Faces com data e hora exatas</p>
+                    <p className="text-[11px] text-muted-foreground">Armazena na pasta D:\Gravacoes_CFTV\Snapshots com data e hora exatas</p>
                   </div>
                   <Switch checked={saveFaceSnapshots} onCheckedChange={setSaveFaceSnapshots} />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Telegram & Mobile Notifications Card */}
+            <Card className="border-emerald-500/30 bg-gradient-to-br from-emerald-950/20 via-background to-background">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2 text-foreground">
+                  <Smartphone className="size-4 text-emerald-400" /> Notificação Instantânea no Celular (Telegram Bot)
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Receba a foto e o alerta no seu celular assim que um rosto desconhecido for avistado na garagem ou portão.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 text-xs">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Token do Bot do Telegram:</Label>
+                  <Input
+                    type="password"
+                    value={telegramToken}
+                    onChange={(e) => {
+                      setTelegramToken(e.target.value);
+                      try { localStorage.setItem("homepulse_dvr_tg_token_v1", e.target.value); } catch {}
+                    }}
+                    placeholder="Ex: 7123456789:AAHk..."
+                    className="font-mono text-xs"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Crie seu bot grátis em 1 minuto falando com o <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="text-primary underline">@BotFather</a> no Telegram.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Seu Chat ID do Telegram:</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={telegramChatId}
+                      onChange={(e) => {
+                        setTelegramChatId(e.target.value);
+                        try { localStorage.setItem("homepulse_dvr_tg_chat_v1", e.target.value); } catch {}
+                      }}
+                      placeholder="Ex: 987654321"
+                      className="font-mono text-xs"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={isSendingTest}
+                      onClick={handleTestNotification}
+                      className="gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 font-semibold"
+                    >
+                      {isSendingTest ? <RefreshCw className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+                      Testar Envio
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Obtenha seu Chat ID iniciando uma conversa com o <a href="https://t.me/userinfobot" target="_blank" rel="noreferrer" className="text-primary underline">@userinfobot</a>.
+                  </p>
                 </div>
               </CardContent>
             </Card>
