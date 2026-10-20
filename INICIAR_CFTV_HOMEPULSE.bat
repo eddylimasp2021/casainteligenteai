@@ -9,6 +9,10 @@ echo ==========================================================
 echo.
 echo [1/3] Verificando Docker Desktop e motor de containers...
 
+:: Limpeza preventiva de restos de instaladores temporarios do Docker no Drive C
+rd /s /q "%TEMP%\DockerDesktopInstallers" >nul 2>&1
+rd /s /q "%TEMP%\DockerDesktopUpdates" >nul 2>&1
+
 :: Teste rapido: se o Docker ja esta 100% responsivo, pula direto para os servicos
 docker version >nul 2>&1
 if "%ERRORLEVEL%"=="0" (
@@ -41,6 +45,8 @@ if %TRIES% GEQ 15 (
     echo [i] Executando restauracao automatica limpa (encerra processos presos e reinicia)...
     taskkill /F /IM "Docker Desktop.exe" /IM "com.docker.backend.exe" /IM "com.docker.proxy.exe" /IM "com.docker.build.exe" /IM "docker-agent.exe" /IM "wsl.exe" /IM "wslhost.exe" >nul 2>&1
     wsl --shutdown >nul 2>&1
+    rd /s /q "%TEMP%\DockerDesktopInstallers" >nul 2>&1
+    rd /s /q "%TEMP%\DockerDesktopUpdates" >nul 2>&1
     timeout /t 3 /nobreak >nul
     echo [i] Subindo Docker Desktop limpo...
     start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
