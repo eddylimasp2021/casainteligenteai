@@ -36,6 +36,9 @@ import {
   ExternalLink,
   Zap,
   Activity,
+  GripVertical,
+  RotateCcw,
+  VideoOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -95,6 +98,7 @@ const CAMERAS_STORAGE_KEY = "homepulse_dvr_cameras_v1";
 const DISKS_STORAGE_KEY = "homepulse_dvr_disks_v1";
 const AI_EVENTS_STORAGE_KEY = "homepulse_dvr_events_v1";
 const STORAGE_CONFIG_KEY = "homepulse_dvr_storage_config_v1";
+const GRID_ORDER_STORAGE_KEY = "homepulse_dvr_grid_order_v2";
 
 function DvrNvrPage() {
   // Storage Configuration state (Where to save recordings and snapshots - strictly Drive D:)
@@ -124,66 +128,85 @@ function DvrNvrPage() {
     return INITIAL_STORAGE_CONFIG;
   });
 
-  // Cameras state
+  // Cameras state with strict deduplication by physical IP
   const [cameras, setCameras] = useState<IpCamera[]>(() => {
     try {
       const saved = localStorage.getItem(CAMERAS_STORAGE_KEY);
-      if (saved) {
-        let parsed = JSON.parse(saved) as IpCamera[];
-        const hasRealCam = parsed.some(
-          (c) => c.ip === "192.168.0.139" || c.streamName === "garagem_rua"
-        );
-        if (!hasRealCam && INITIAL_CAMERAS.length > 0) {
-          parsed = [INITIAL_CAMERAS[0]!, ...parsed];
-        }
+      let parsed = saved ? (JSON.parse(saved) as IpCamera[]) : [...INITIAL_CAMERAS];
 
-        // Ensure 192.168.0.240 triple camera is present
-        const hasCam240 = parsed.some(
-          (c) => c.ip === "192.168.0.240" || c.streamName === "cam_192_168_0_240" || c.id === "cam-real-240"
-        );
-        if (!hasCam240 && INITIAL_CAMERAS.length > 1) {
-          parsed = [parsed[0]!, INITIAL_CAMERAS[1]!, ...parsed.slice(1)];
+      // 1. Initial deduplication by IP
+      const seen = new Set<string>();
+      const deduped: IpCamera[] = [];
+      for (const c of parsed) {
+        const cleanIp = (c.ip || "").trim();
+        if (cleanIp && cleanIp !== "127.0.0.1" && cleanIp !== "localhost") {
+          if (seen.has(cleanIp)) continue;
+          seen.add(cleanIp);
         }
-
-        // Ensure 192.168.0.198 camera is present
-        const hasCam198 = parsed.some(
-          (c) => c.ip === "192.168.0.198" || c.streamName === "cam_192_168_0_198" || c.id === "cam-real-198"
-        );
-        if (!hasCam198 && INITIAL_CAMERAS.some((c) => c.ip === "192.168.0.198")) {
-          const initial198 = INITIAL_CAMERAS.find((c) => c.ip === "192.168.0.198")!;
-          parsed = [...parsed, initial198];
-        }
-
-        return parsed.map((c) => {
-          if (
-            (c.ip === "192.168.0.139" || (c.name && c.name.toLowerCase().includes("garagem"))) &&
-            (!c.streamName || c.streamName === "cam-garagem")
-          ) {
-            return {
-              ...c,
-              streamName: "garagem_rua",
-              activeProtocol: "WebRTC",
-            };
-          }
-          if (c.ip === "192.168.0.240" || (c.name && c.name.toLowerCase().includes("240"))) {
-            return {
-              ...c,
-              streamName: "cam_192_168_0_240",
-              activeProtocol: "WebRTC",
-              lensCount: c.lensCount ?? 3,
-              splitLensesIntoGrid: c.splitLensesIntoGrid ?? true,
-            };
-          }
-          if (c.ip === "192.168.0.198" || (c.name && c.name.toLowerCase().includes("198"))) {
-            return {
-              ...c,
-              streamName: "cam_192_168_0_198",
-              activeProtocol: "WebRTC",
-            };
-          }
-          return c;
-        });
+        deduped.push(c);
       }
+      parsed = deduped;
+
+      // Ensure Garagem (192.168.0.139) is present
+      if (!parsed.some((c) => c.ip === "192.168.0.139" || c.streamName === "garagem_rua")) {
+        const init139 = INITIAL_CAMERAS.find((c) => c.ip === "192.168.0.139") || INITIAL_CAMERAS[0]!;
+        parsed.unshift(init139);
+      }
+
+      // Ensure 192.168.0.240 is present exactly once
+      if (!parsed.some((c) => c.ip === "192.168.0.240" || c.streamName === "cam_192_168_0_240")) {
+        const init240 = INITIAL_CAMERAS.find((c) => c.ip === "192.168.0.240") || INITIAL_CAMERAS[1]!;
+        parsed.push(init240);
+      }
+
+      // Ensure 192.168.0.198 is present exactly once
+      if (!parsed.some((c) => c.ip === "192.168.0.198" || c.streamName === "cam_192_168_0_198")) {
+        const init198 = INITIAL_CAMERAS.find((c) => c.ip === "192.168.0.198")!;
+        if (init198) parsed.push(init198);
+      }
+
+      // Final deduplication pass to guarantee no physical camera is ever repeated
+      const finalSeen = new Set<string>();
+      const finalCameras: IpCamera[] = [];
+      for (const c of parsed) {
+        const cleanIp = (c.ip || "").trim();
+        if (cleanIp && cleanIp !== "127.0.0.1" && cleanIp !== "localhost") {
+          if (finalSeen.has(cleanIp)) continue;
+          finalSeen.add(cleanIp);
+        }
+        finalCameras.push(c);
+      }
+
+      const normalized = finalCameras.map((c) => {
+        if (c.ip === "192.168.0.139" || (c.name && c.name.toLowerCase().includes("garagem"))) {
+          return {
+            ...c,
+            streamName: "garagem_rua",
+            activeProtocol: "WebRTC" as const,
+          };
+        }
+        if (c.ip === "192.168.0.240" || (c.name && c.name.toLowerCase().includes("240"))) {
+          return {
+            ...c,
+            streamName: "cam_192_168_0_240",
+            activeProtocol: "WebRTC" as const,
+            lensCount: 3,
+            splitLensesIntoGrid: true,
+          };
+        }
+        if (c.ip === "192.168.0.198" || (c.name && c.name.toLowerCase().includes("198"))) {
+          return {
+            ...c,
+            streamName: "cam_192_168_0_198",
+            activeProtocol: "WebRTC" as const,
+          };
+        }
+        return c;
+      });
+
+      // Save the cleaned-up unique camera list immediately
+      localStorage.setItem(CAMERAS_STORAGE_KEY, JSON.stringify(normalized));
+      return normalized;
     } catch (e) {
       console.warn("Failed to parse saved cameras", e);
     }
@@ -547,10 +570,18 @@ function DvrNvrPage() {
     toast.success("Gravação Manual Emergencial ativada em todos os canais simultaneamente.");
   };
 
-  // Expand multi-lens cameras into individual grid channels when splitLensesIntoGrid is active
+  // Expand multi-lens cameras into individual grid channels without duplicates
   const gridChannels = useMemo(() => {
     const list: IpCamera[] = [];
+    const seenIps = new Set<string>();
+
     for (const cam of cameras) {
+      const cleanIp = (cam.ip || "").trim();
+      if (cleanIp && cleanIp !== "127.0.0.1" && cleanIp !== "localhost") {
+        if (seenIps.has(cleanIp)) continue;
+        seenIps.add(cleanIp);
+      }
+
       const total =
         cam.lensCount ??
         (cam.ip === "192.168.0.240" || cam.name.toLowerCase().includes("240") ? 3 : 1);
@@ -596,18 +627,118 @@ function DvrNvrPage() {
     return list;
   }, [cameras]);
 
-  // Determine cameras to render in grid
-  let displayedCameras = gridChannels;
-  if (gridMode === "1x1") {
-    const found = gridChannels.find((c) => c.id === focusedCameraId);
-    displayedCameras = found ? [found] : gridChannels.slice(0, 1);
-  } else if (gridMode === "2x2") {
-    displayedCameras = gridChannels.slice(0, 4);
-  } else if (gridMode === "3x2") {
-    displayedCameras = gridChannels.slice(0, 6);
-  } else if (gridMode === "3x3") {
-    displayedCameras = gridChannels.slice(0, 9);
-  }
+  // Custom manual order state for dragging and dropping camera slots
+  const [gridOrder, setGridOrder] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(GRID_ORDER_STORAGE_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
+
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  // Target slots per grid mode: 1x1=1, 2x2=4, 3x2=6 (6 previews), 3x3=9
+  const targetSlotCount = useMemo(() => {
+    switch (gridMode) {
+      case "1x1": return 1;
+      case "2x2": return 4;
+      case "3x2": return 6;
+      case "3x3": return 9;
+      case "1+5": return 6;
+      default: return 6;
+    }
+  }, [gridMode]);
+
+  // Ordered grid slots: maps active cameras to user's custom sequence, padding with null (Quadro Preto)
+  const orderedSlots = useMemo(() => {
+    if (gridMode === "1x1") {
+      const found = gridChannels.find((c) => c.id === focusedCameraId);
+      return [found || gridChannels[0] || null];
+    }
+
+    const channelMap = new Map<string, IpCamera>();
+    gridChannels.forEach((c) => channelMap.set(c.id, c));
+
+    const slots: (IpCamera | null)[] = [];
+    const usedIds = new Set<string>();
+
+    // 1. Fill slots based on custom saved sequence
+    for (let i = 0; i < gridOrder.length && slots.length < targetSlotCount; i++) {
+      const id = gridOrder[i];
+      if (id && id.startsWith("empty_")) {
+        slots.push(null);
+      } else if (id && channelMap.has(id)) {
+        slots.push(channelMap.get(id)!);
+        usedIds.add(id);
+      }
+    }
+
+    // 2. Append active channels that are not yet placed
+    for (const c of gridChannels) {
+      if (slots.length >= targetSlotCount) break;
+      if (!usedIds.has(c.id)) {
+        slots.push(c);
+        usedIds.add(c.id);
+      }
+    }
+
+    // 3. Pad remaining slots up to targetSlotCount with null (Quadro Preto / Black Frame)
+    while (slots.length < targetSlotCount) {
+      slots.push(null);
+    }
+
+    return slots.slice(0, targetSlotCount);
+  }, [gridChannels, gridOrder, targetSlotCount, gridMode, focusedCameraId]);
+
+  // Drag and drop handlers
+  const handleDragStart = (index: number) => {
+    setDraggedIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDragEnter = (index: number) => {
+    setDragOverIndex(index);
+  };
+
+  const handleDrop = (dropIndex: number) => {
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+
+    const currentSlots = [...orderedSlots];
+    const moved = currentSlots[draggedIndex] ?? null;
+    const target = currentSlots[dropIndex] ?? null;
+
+    // Swap the slots
+    currentSlots[draggedIndex] = target;
+    currentSlots[dropIndex] = moved;
+
+    const newOrder = currentSlots.map((item, idx) => (item ? item.id : `empty_${idx}`));
+    setGridOrder(newOrder);
+    localStorage.setItem(GRID_ORDER_STORAGE_KEY, JSON.stringify(newOrder));
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+    toast.success("Posição do mosaico reordenada com sucesso!");
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleResetGridOrder = () => {
+    setGridOrder([]);
+    localStorage.removeItem(GRID_ORDER_STORAGE_KEY);
+    toast.info("Ordem padrão do mosaico restaurada.");
+  };
 
   return (
     <div className="space-y-6 pb-12">
@@ -860,6 +991,20 @@ function DvrNvrPage() {
                 </Button>
               </div>
 
+              {/* Reset Custom Grid Order Button */}
+              {gridOrder.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleResetGridOrder}
+                  className="h-7 px-2 text-xs font-medium gap-1 text-muted-foreground hover:text-foreground"
+                  title="Restaurar ordem padrão das câmeras"
+                >
+                  <RotateCcw className="size-3" />
+                  <span className="hidden sm:inline">Resetar Ordem</span>
+                </Button>
+              )}
+
               {/* Stream Quality Selector */}
               <div className="flex items-center rounded-lg border border-border/60 bg-card/60 p-0.5 text-xs">
                 <Button
@@ -944,7 +1089,7 @@ function DvrNvrPage() {
               </div>
             </div>
           ) : (
-            /* Standard Grid Layout (1x1, 2x2, 3x3) */
+            /* Standard Grid Layout (1x1, 2x2, 3x2 6 Canais, 3x3) com Arrastar & Soltar e Quadros Pretos */
             <div
               className={`grid gap-4 ${
                 gridMode === "1x1"
@@ -954,40 +1099,135 @@ function DvrNvrPage() {
                   : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
               }`}
             >
-              {displayedCameras.map((camera) => (
-                <div key={camera.id} className="relative">
-                  {viewEngine === "real" ? (
-                    <RealCameraPlayer
-                      camera={camera}
-                      gatewayUrl={gatewayUrl}
-                      onOpenPtz={handleOpenPtz}
-                      isFocused={focusedCameraId === camera.id}
-                      onSelect={() => setFocusedCameraId(camera.id)}
-                    />
-                  ) : (
-                    <LiveCameraView
-                      camera={camera}
-                      onOpenPtz={handleOpenPtz}
-                      isFocused={focusedCameraId === camera.id}
-                      onSelect={() => setFocusedCameraId(camera.id)}
-                    />
-                  )}
-                  {gridMode !== "1x1" && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setFocusedCameraId(camera.id);
-                        setGridMode("1x1");
-                      }}
-                      className="absolute top-2 right-2 z-20 h-7 w-7 p-0 bg-black/60 hover:bg-black/80 text-white rounded opacity-0 hover:opacity-100 transition-opacity"
-                      title="Focar nesta câmera (1x1)"
+              {orderedSlots.map((camera, index) => {
+                if (!camera) {
+                  /* Quadro Preto: Canal Vazio / Sem Câmera */
+                  return (
+                    <div
+                      key={`empty-slot-${index}`}
+                      draggable={true}
+                      onDragStart={() => handleDragStart(index)}
+                      onDragOver={(e) => handleDragOver(e, index)}
+                      onDragEnter={() => handleDragEnter(index)}
+                      onDragEnd={handleDragEnd}
+                      onDrop={() => handleDrop(index)}
+                      className={`relative aspect-video w-full rounded-2xl bg-black border border-neutral-800/80 shadow-2xl flex flex-col justify-between p-4 overflow-hidden select-none transition-all duration-200 cursor-grab active:cursor-grabbing group ${
+                        draggedIndex === index ? "opacity-30 scale-[0.98]" : ""
+                      } ${
+                        dragOverIndex === index
+                          ? "ring-2 ring-primary ring-offset-2 ring-offset-background border-primary scale-[1.01]"
+                          : "hover:border-neutral-700"
+                      }`}
+                      title="Quadro Preto (Canal Vazio). Arraste uma câmera para cá para trocar a posição."
                     >
-                      <Maximize2 className="size-3.5" />
-                    </Button>
-                  )}
-                </div>
-              ))}
+                      {/* OSD Header */}
+                      <div className="flex items-center justify-between z-10">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="bg-neutral-900/90 text-neutral-400 border-neutral-700 font-mono text-xs">
+                            CH {String(index + 1).padStart(2, "0")}
+                          </Badge>
+                          <span className="text-xs font-medium text-neutral-500">Sem Câmera</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-neutral-900/80 border border-neutral-800 text-[11px] font-mono text-neutral-500">
+                          <GripVertical className="size-3 text-neutral-600" />
+                          <span>Slot Vazio</span>
+                        </div>
+                      </div>
+
+                      {/* Center Graphic */}
+                      <div className="flex flex-col items-center justify-center gap-2 text-center my-auto z-10">
+                        <div className="size-12 rounded-full bg-neutral-900/90 border border-neutral-800 flex items-center justify-center text-neutral-600 group-hover:text-primary group-hover:border-primary/40 transition-colors">
+                          <VideoOff className="size-5" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-neutral-400">Canal Livre</p>
+                          <p className="text-xs text-neutral-600">Arraste uma câmera para esta posição</p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsCameraManagerOpen(true);
+                          }}
+                          className="mt-1 h-7 text-xs border-neutral-800 bg-neutral-900 hover:bg-neutral-800 text-neutral-300"
+                        >
+                          <Plus className="size-3.5 mr-1 text-primary" /> Adicionar Câmera
+                        </Button>
+                      </div>
+
+                      {/* Bottom Info */}
+                      <div className="flex items-center justify-between text-[11px] font-mono text-neutral-600 z-10">
+                        <span>QUADRO PRETO</span>
+                        <span>SLOT {index + 1}</span>
+                      </div>
+
+                      {/* CCTV CRT Scanline Grid Effect */}
+                      <div className="absolute inset-0 pointer-events-none opacity-[0.02] bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]" />
+                    </div>
+                  );
+                }
+
+                /* Active Camera Slot */
+                return (
+                  <div
+                    key={camera.id}
+                    draggable={true}
+                    onDragStart={() => handleDragStart(index)}
+                    onDragOver={(e) => handleDragOver(e, index)}
+                    onDragEnter={() => handleDragEnter(index)}
+                    onDragEnd={handleDragEnd}
+                    onDrop={() => handleDrop(index)}
+                    className={`relative group transition-all duration-200 rounded-2xl ${
+                      draggedIndex === index ? "opacity-30 scale-[0.98]" : ""
+                    } ${
+                      dragOverIndex === index
+                        ? "ring-2 ring-primary ring-offset-2 ring-offset-background scale-[1.01]"
+                        : ""
+                    }`}
+                  >
+                    {/* Floating Drag Handle Badge */}
+                    <div
+                      className="absolute top-2 left-2 z-20 flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/70 hover:bg-black/90 backdrop-blur-md border border-white/10 text-[10px] font-mono text-neutral-300 cursor-grab active:cursor-grabbing select-none shadow-md opacity-80 group-hover:opacity-100 transition-opacity"
+                      title="Clique e arraste para reposicionar esta câmera no mosaico"
+                    >
+                      <GripVertical className="size-3 text-primary" />
+                      <span>CH {String(index + 1).padStart(2, "0")}</span>
+                    </div>
+
+                    {viewEngine === "real" ? (
+                      <RealCameraPlayer
+                        camera={camera}
+                        gatewayUrl={gatewayUrl}
+                        onOpenPtz={handleOpenPtz}
+                        isFocused={focusedCameraId === camera.id}
+                        onSelect={() => setFocusedCameraId(camera.id)}
+                      />
+                    ) : (
+                      <LiveCameraView
+                        camera={camera}
+                        onOpenPtz={handleOpenPtz}
+                        isFocused={focusedCameraId === camera.id}
+                        onSelect={() => setFocusedCameraId(camera.id)}
+                      />
+                    )}
+                    {gridMode !== "1x1" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setFocusedCameraId(camera.id);
+                          setGridMode("1x1");
+                        }}
+                        className="absolute top-2 right-2 z-20 h-7 w-7 p-0 bg-black/60 hover:bg-black/80 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Focar nesta câmera (1x1)"
+                      >
+                        <Maximize2 className="size-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
