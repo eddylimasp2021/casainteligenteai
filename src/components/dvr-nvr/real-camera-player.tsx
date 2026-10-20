@@ -80,47 +80,6 @@ export function RealCameraPlayer({
   const [volume, setVolume] = useState<number>(0.8);
   const [hasAudioTrack, setHasAudioTrack] = useState<boolean>(false);
 
-  // Face ID Real-Time Bounding Box Overlay State
-  const [showFaceOverlay, setShowFaceOverlay] = useState<boolean>(true);
-  const [detectedFaces, setDetectedFaces] = useState<
-    Array<{
-      isRecognized: boolean;
-      personName: string;
-      confidence: number;
-      box: { x: number; y: number; width: number; height: number };
-    }>
-  >([]);
-
-  useEffect(() => {
-    if (streamState !== "playing" || !showFaceOverlay) {
-      setDetectedFaces([]);
-      return;
-    }
-
-    let isMounted = true;
-    const streamTarget = camera.streamName || camera.id;
-
-    const pollInterval = setInterval(async () => {
-      try {
-        const res = await fetch(
-          `${gatewayBase}/api/face/detect?camera=${streamTarget}&name=${encodeURIComponent(camera.name)}`
-        );
-        if (res.ok) {
-          const data = await res.json();
-          if (isMounted && data.faces) {
-            setDetectedFaces(data.faces);
-          }
-        }
-      } catch {
-        // Silent catch for network jitter
-      }
-    }, 2200);
-
-    return () => {
-      isMounted = false;
-      clearInterval(pollInterval);
-    };
-  }, [streamState, showFaceOverlay, camera.streamName, camera.id, camera.name, gatewayBase]);
   const [isTalking, setIsTalking] = useState<boolean>(false);
   const [isIntercomOpen, setIsIntercomOpen] = useState<boolean>(false);
   const [micLevel, setMicLevel] = useState<number>(0);
@@ -256,6 +215,49 @@ export function RealCameraPlayer({
     raw = raw.replace("://localhost:", "://127.0.0.1:");
     return raw;
   }, [camera.gatewayHost, gatewayUrl]);
+
+// Face ID Real-Time Bounding Box Overlay State
+  const [showFaceOverlay, setShowFaceOverlay] = useState<boolean>(true);
+  const [detectedFaces, setDetectedFaces] = useState<
+    Array<{
+      isRecognized: boolean;
+      personName: string;
+      confidence: number;
+      box: { x: number; y: number; width: number; height: number };
+    }>
+  >([]);
+
+  useEffect(() => {
+    if (streamState !== "playing" || !showFaceOverlay) {
+      setDetectedFaces([]);
+      return;
+    }
+
+    let isMounted = true;
+    const streamTarget = camera.streamName || camera.id;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch(
+          `${gatewayBase}/api/face/detect?camera=${streamTarget}&name=${encodeURIComponent(camera.name)}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && data.faces) {
+            setDetectedFaces(data.faces);
+          }
+        }
+      } catch {
+        // Silent catch for network jitter
+      }
+    }, 2200);
+
+    return () => {
+      isMounted = false;
+      clearInterval(pollInterval);
+    };
+  }, [streamState, showFaceOverlay, camera.streamName, camera.id, camera.name, gatewayBase]);
+
 
   // Update OSD clock
   useEffect(() => {

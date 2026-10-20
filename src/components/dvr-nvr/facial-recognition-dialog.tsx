@@ -50,7 +50,7 @@ export function FacialRecognitionDialog({
   onOpenChange,
   authorizedPersons,
   onSavePersons,
-  cameras,
+  cameras = [],
   gatewayUrl = "http://localhost:1984",
 }: FacialRecognitionDialogProps) {
   const [activeTab, setActiveTab] = useState<string>("list");
@@ -64,7 +64,7 @@ export function FacialRecognitionDialog({
   const [notes, setNotes] = useState("");
   const [photoData, setPhotoData] = useState<string | null>(null);
   const [selectedCameraForSnap, setSelectedCameraForSnap] = useState<string>(
-    cameras[0]?.streamName || "cam_192_168_0_240"
+    cameras?.[0]?.streamName || "cam_192_168_0_240"
   );
   const [isCapturing, setIsCapturing] = useState(false);
 
