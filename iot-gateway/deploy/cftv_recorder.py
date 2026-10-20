@@ -134,10 +134,57 @@ def run_ffmpeg_recorder(camera: dict):
         print(f"[NVR-{cam_id}] Aguardando 20 segundos antes de tentar novamente...", flush=True)
         time.sleep(20)
 
+def cleanup_old_recordings():
+    """
+    Gerenciador de Retenção Contínua 24/7:
+    1. Remove automaticamente gravações com mais de 30 dias.
+    2. Se o disco atingir 85% de uso, purga progressivamente o dia mais antigo.
+    """
+    while True:
+        try:
+            total, used, free = shutil.disk_usage(RECORDINGS_DIR)
+            used_percent = (used / total) * 100 if total > 0 else 0
+            now = datetime.now()
+            today_str = now.strftime("%Y-%m-%d")
+
+            for cam in CAMERAS:
+                cam_id = cam["id"]
+                cam_path = os.path.join(RECORDINGS_DIR, cam_id)
+                if not os.path.isdir(cam_path):
+                    continue
+
+                date_folders = sorted([d for d in os.listdir(cam_path) if os.path.isdir(os.path.join(cam_path, d))])
+
+                # 1. Purga de gravações com mais de 30 dias
+                for df in date_folders:
+                    try:
+                        folder_date = datetime.strptime(df, "%Y-%m-%d")
+                        if (now - folder_date).days > 30:
+                            target_dir = os.path.join(cam_path, df)
+                            print(f"[Purge] Removendo gravações antigas (>30 dias): {target_dir}", flush=True)
+                            shutil.rmtree(target_dir, ignore_errors=True)
+                    except ValueError:
+                        pass
+
+                # 2. Se o disco passar de 85%, libera o dia mais antigo (exceto hoje)
+                if used_percent > 85.0 and date_folders:
+                    oldest_date = date_folders[0]
+                    if oldest_date != today_str:
+                        target_dir = os.path.join(cam_path, oldest_date)
+                        print(f"[Purge] Disco em {used_percent:.1f}% (>85%). Liberando dia mais antigo: {target_dir}", flush=True)
+                        shutil.rmtree(target_dir, ignore_errors=True)
+
+        except Exception as e:
+            print(f"[Purge] Erro no gerenciador de retenção: {e}", flush=True)
+
+        time.sleep(3600)  # Executa a cada 1 hora
+
 def start_recorders():
     for cam in CAMERAS:
         t = threading.Thread(target=run_ffmpeg_recorder, args=(cam,), daemon=True)
         t.start()
+    t_clean = threading.Thread(target=cleanup_old_recordings, daemon=True)
+    t_clean.start()
 
 # ---------------------------------------------------------------------------
 # Smart TV (LG webOS / Tizen / Local IoT) Bridge

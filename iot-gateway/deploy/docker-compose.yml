@@ -5,7 +5,7 @@ services:
   mosquitto:
     image: eclipse-mosquitto:2.0.20
     container_name: ci-mosquitto
-    restart: unless-stopped
+    restart: always
     ports:
       # Expor porta 1883 apenas na rede local; NÃO expor abertamente na internet
       - "1883:1883"
@@ -36,7 +36,7 @@ services:
       context: ..
       dockerfile: Dockerfile
     container_name: ci-iot-gateway
-    restart: unless-stopped
+    restart: always
     ports:
       - "8080:8080"
     environment:
@@ -78,7 +78,7 @@ services:
   go2rtc:
     image: alexxit/go2rtc:latest
     container_name: ci-go2rtc
-    restart: unless-stopped
+    restart: always
     ports:
       - "1984:1984"       # API REST, WebSockets e Interface Web
       - "8554:8554"       # Servidor RTSP local
@@ -106,7 +106,7 @@ services:
   recorder:
     image: alexxit/go2rtc:latest
     container_name: ci-recorder
-    restart: unless-stopped
+    restart: always
     command: python3 /config/cftv_recorder.py
     environment:
       - GO2RTC_HOST=ci-go2rtc
@@ -136,7 +136,7 @@ services:
   tunnel:
     image: cloudflare/cloudflared:latest
     container_name: ci-tunnel
-    restart: unless-stopped
+    restart: always
     command: tunnel --no-autoupdate run --token eyJhIjoiMzJjY2VjY2RiYjRhMmJkYjhkN2E4MjYyMTA0OTAzMzUiLCJ0IjoiNjhjNjc2MTMtNzJhNC00NWYwLTllOGEtNzUwMDg1ZGYyNzZjIiwicyI6Ik5tRTNaV0ZtTVdRdFpUYzVaaTAwWTJKaUxUZzJaamt0WkRnM05qazVPVEZrWW1ObSJ9
     depends_on:
       - recorder
