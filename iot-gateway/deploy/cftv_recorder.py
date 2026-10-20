@@ -237,6 +237,23 @@ def execute_lg_tv_command(ip="192.168.0.168", uri="", payload=None, client_key="
 # ---------------------------------------------------------------------------
 # HTTP Handler: Reverse Proxy, Search API & Video Streamer
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Snapshot cache & single-flight lock to protect go2rtc from polling storms
+# ---------------------------------------------------------------------------
+_FRAME_CACHE = {}
+_FRAME_LOCK = threading.Lock()
+_IN_FLIGHT_EVENTS = {}
+
+def get_cached_frame(src: str, max_age: float = 1.5):
+    with _FRAME_LOCK:
+        entry = _FRAME_CACHE.get(src)
+        if entry and (time.time() - entry["timestamp"] < max_age):
+            return entry["data"]
+    return None
+
+def set_cached_frame(src: str, data: bytes):
+    with _FRAME_LOCK:
+        _FRAME_CACHE[src] = {"data": data, "timestamp": time.time()}
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
     allow_reuse_address = True
@@ -290,6 +307,11 @@ class CFTVGatewayHandler(BaseHTTPRequestHandler):
         # 4. Video Playback: /recordings/...
         if path.startswith("/recordings/"):
             self.handle_serve_recording(path)
+            return
+
+        # 4.5 API: Optimized Snapshot with In-Memory Cache and Single-Flight
+        if path == "/api/frame.jpeg":
+            self.handle_frame_jpeg(query)
             return
 
         # 5. Fallback: Reverse Proxy to go2rtc
@@ -532,6 +554,85 @@ class CFTVGatewayHandler(BaseHTTPRequestHandler):
             pass
 
     # -----------------------------------------------------------------------
+    # -----------------------------------------------------------------------
+    # Optimized Snapshot Handling (Throttling, In-Memory Cache & Dedup)
+    # -----------------------------------------------------------------------
+    def handle_frame_jpeg(self, query: dict):
+        raw_src = query.get("src", [""])[0]
+        src = self.resolve_camera_id(raw_src) if raw_src else ""
+        if not src:
+            src = raw_src or "cam_192_168_0_240"
+
+        # 1. Return fresh cached frame (< 1.5 seconds old) immediately
+        cached = get_cached_frame(src, max_age=1.5)
+        if cached:
+            self.send_frame_response(cached)
+            return
+
+        # 2. Request deduplication (single-flight)
+        with _FRAME_LOCK:
+            in_flight = _IN_FLIGHT_EVENTS.get(src)
+            if in_flight is not None:
+                is_leader = False
+            else:
+                in_flight = threading.Event()
+                _IN_FLIGHT_EVENTS[src] = in_flight
+                is_leader = True
+
+        if not is_leader:
+            # Wait up to 3.0s for the leader thread to fetch the fresh frame
+            in_flight.wait(timeout=3.0)
+            cached = get_cached_frame(src, max_age=3.0)
+            if cached:
+                self.send_frame_response(cached)
+                return
+            # Stale fallback: return any existing frame from memory
+            with _FRAME_LOCK:
+                entry = _FRAME_CACHE.get(src)
+                if entry:
+                    self.send_frame_response(entry["data"])
+                    return
+
+        # 3. Leader thread: Fetch frame from go2rtc with 4s timeout
+        try:
+            target_url = f"{GO2RTC_BASE}/api/frame.jpeg?src={urllib.parse.quote(src)}"
+            req = urllib.request.Request(target_url, headers={"User-Agent": "CFTV-Gateway/1.0"})
+            with urllib.request.urlopen(req, timeout=4.0) as resp:
+                frame_data = resp.read()
+                if frame_data:
+                    set_cached_frame(src, frame_data)
+                    self.send_frame_response(frame_data)
+                    return
+        except Exception as e:
+            # Stale fallback on timeout or error: keep UI smooth without failing
+            with _FRAME_LOCK:
+                entry = _FRAME_CACHE.get(src)
+                if entry:
+                    self.send_frame_response(entry["data"])
+                    return
+            print(f"[Snapshot] Frame indisponivel temporariamente ({src}): {e}", flush=True)
+            self.send_response(504)
+            self.send_cors_headers()
+            self.end_headers()
+            self.wfile.write(b"Snapshot timeout")
+        finally:
+            if is_leader:
+                with _FRAME_LOCK:
+                    _IN_FLIGHT_EVENTS.pop(src, None)
+                in_flight.set()
+
+    def send_frame_response(self, frame_data: bytes):
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "image/jpeg")
+            self.send_header("Content-Length", str(len(frame_data)))
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            self.send_cors_headers()
+            self.end_headers()
+            self.wfile.write(frame_data)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
     # Reverse Proxy to go2rtc
     # -----------------------------------------------------------------------
     def proxy_to_go2rtc(self, method: str):
@@ -548,7 +649,7 @@ class CFTVGatewayHandler(BaseHTTPRequestHandler):
 
         try:
             req = urllib.request.Request(target_url, data=body, headers=req_headers, method=method)
-            with urllib.request.urlopen(req, timeout=15) as resp:
+            with urllib.request.urlopen(req, timeout=8) as resp:
                 self.send_response(resp.status)
                 for k, v in resp.getheaders():
                     if k.lower() not in ["access-control-allow-origin", "transfer-encoding"]:

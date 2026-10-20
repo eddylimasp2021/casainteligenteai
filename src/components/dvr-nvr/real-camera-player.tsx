@@ -470,25 +470,19 @@ export function RealCameraPlayer({
 
     // Initial load
     setSnapshotTimestamp(Date.now());
-
-    // Refresh every 1000ms
-    snapshotIntervalRef.current = window.setInterval(() => {
-      setSnapshotTimestamp(Date.now());
-    }, 1000);
-
     setStreamState("playing");
     setRealResolution("1920x1080 (HD)");
     setRealCodec("JPEG");
     setLatencyMs(150);
   }, [disconnectStream]);
 
-  // Continuous background snapshot refresh so live camera image is always ready
+  // Relaxed snapshot refresh only when explicitly in Snapshot mode (prevents overloading go2rtc)
   useEffect(() => {
-    if (streamState === "playing" && protocol === "WebRTC") return;
+    if (protocol !== "Snapshot" || streamState !== "playing") return;
 
     const interval = setInterval(() => {
       setSnapshotTimestamp(Date.now());
-    }, protocol === "Snapshot" ? 1000 : 1500);
+    }, 2000);
 
     return () => clearInterval(interval);
   }, [protocol, streamState]);
