@@ -39,6 +39,7 @@ import {
   GripVertical,
   RotateCcw,
   VideoOff,
+  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -63,6 +64,8 @@ import {
   INITIAL_CAMERAS,
   INITIAL_DISKS,
   INITIAL_AI_EVENTS,
+  AuthorizedPerson,
+  INITIAL_AUTHORIZED_PERSONS,
 } from "@/types/dvr-nvr";
 import { LiveCameraView } from "@/components/dvr-nvr/live-camera-view";
 import { RealCameraPlayer } from "@/components/dvr-nvr/real-camera-player";
@@ -72,6 +75,7 @@ import { AiAnalyticsPanel } from "@/components/dvr-nvr/ai-analytics-panel";
 import { CameraManagerDialog } from "@/components/dvr-nvr/camera-manager-dialog";
 import { StorageSettingsDialog } from "@/components/dvr-nvr/storage-settings-dialog";
 import { MultiLensConfigDialog } from "@/components/dvr-nvr/multi-lens-config-dialog";
+import { FacialRecognitionDialog } from "@/components/dvr-nvr/facial-recognition-dialog";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/dvr-nvr")({
@@ -449,6 +453,24 @@ function DvrNvrPage() {
   const [ptzCamera, setPtzCamera] = useState<IpCamera | null>(null);
   const [isStorageSettingsOpen, setIsStorageSettingsOpen] = useState(false);
   const [isMultiLensModalOpen, setIsMultiLensModalOpen] = useState(false);
+  const [isFacialModalOpen, setIsFacialModalOpen] = useState(false);
+  const [authorizedPersons, setAuthorizedPersons] = useState<AuthorizedPerson[]>(() => {
+    try {
+      const saved = localStorage.getItem("homepulse_dvr_authorized_faces_v1");
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.warn("Failed to parse saved authorized faces", e);
+    }
+    return INITIAL_AUTHORIZED_PERSONS;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("homepulse_dvr_authorized_faces_v1", JSON.stringify(authorizedPersons));
+    } catch (e) {
+      console.warn("Failed to save authorized faces", e);
+    }
+  }, [authorizedPersons]);
 
   // Helper to open PTZ targeting root camera even when clicked on virtual sub-channel
   const handleOpenPtz = (cam: IpCamera) => {
@@ -839,6 +861,18 @@ function DvrNvrPage() {
           >
             <Layers className="size-4" />
             Multi-Lente (3 Visões)
+          </Button>
+
+          {/* Facial Recognition Management Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsFacialModalOpen(true)}
+            className="gap-1.5 text-xs border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-semibold shadow-sm"
+            title="Cadastrar e gerenciar moradores e reconhecimento facial por IA"
+          >
+            <Users className="size-4" />
+            Reconhecimento Facial
           </Button>
 
           <Button
@@ -1308,6 +1342,7 @@ function DvrNvrPage() {
           <AiAnalyticsPanel
             cameras={cameras}
             events={aiEvents}
+            onOpenFacialDialog={() => setIsFacialModalOpen(true)}
             onAcknowledgeEvent={(eventId) => {
               setAiEvents((prev) =>
                 prev.map((e) => (e.id === eventId ? { ...e, acknowledged: true } : e))
@@ -1635,6 +1670,23 @@ function DvrNvrPage() {
           setCameras(updated);
           localStorage.setItem(CAMERAS_STORAGE_KEY, JSON.stringify(updated));
         }}
+      />
+
+      {/* Facial Recognition Management Dialog */}
+      <FacialRecognitionDialog
+        isOpen={isFacialModalOpen}
+        onOpenChange={setIsFacialModalOpen}
+        authorizedPersons={authorizedPersons}
+        onSavePersons={(updated) => {
+          setAuthorizedPersons(updated);
+          try {
+            localStorage.setItem("homepulse_dvr_authorized_faces_v1", JSON.stringify(updated));
+          } catch (e) {
+            console.warn("Failed to save authorized persons", e);
+          }
+        }}
+        cameras={cameras}
+        gatewayUrl={gatewayUrl}
       />
 
       {/* Gateway CFTV Configuration Modal */}

@@ -62,16 +62,69 @@ export interface NvrRecording {
   locked: boolean;
 }
 
+export interface AuthorizedPerson {
+  id: string;
+  name: string;
+  role: "morador" | "familiar" | "visitante" | "prestador";
+  avatarUrl?: string;
+  photoData?: string; // base64 da foto cadastrada
+  enrolledAt: string;
+  accessLevel: "total" | "parcial" | "horario_comercial";
+  notifyOnDetection: boolean;
+  notes?: string;
+  lastSeenTimestamp?: string;
+  lastSeenCamera?: string;
+}
+
+export const INITIAL_AUTHORIZED_PERSONS: AuthorizedPerson[] = [
+  {
+    id: "person-01",
+    name: "Eduardo (Morador)",
+    role: "morador",
+    enrolledAt: "2026-10-15T10:00:00Z",
+    accessLevel: "total",
+    notifyOnDetection: false,
+    lastSeenTimestamp: "Hoje às 11:35",
+    lastSeenCamera: "Garagem Rua",
+    notes: "Acesso total à residência, alarmes e portões automáticos",
+  },
+  {
+    id: "person-02",
+    name: "Família / Convidado",
+    role: "familiar",
+    enrolledAt: "2026-10-16T14:30:00Z",
+    accessLevel: "total",
+    notifyOnDetection: true,
+    lastSeenTimestamp: "Hoje às 09:12",
+    lastSeenCamera: "Câmera Tripla — Lente 1",
+    notes: "Notificar celular ao chegar",
+  },
+  {
+    id: "person-03",
+    name: "Prestador de Serviço",
+    role: "prestador",
+    enrolledAt: "2026-10-18T08:00:00Z",
+    accessLevel: "horario_comercial",
+    notifyOnDetection: true,
+    lastSeenTimestamp: "Ontem às 15:40",
+    lastSeenCamera: "Câmera IP (192.168.0.198)",
+    notes: "Acesso autorizado apenas entre 08h e 17h",
+  },
+];
+
 export interface AiSecurityEvent {
   id: string;
   cameraId: string;
   cameraName: string;
   timestamp: string;
-  type: "human" | "vehicle" | "motion" | "tripwire" | "tamper";
+  type: "human" | "vehicle" | "motion" | "tripwire" | "tamper" | "face_recognized" | "face_unknown";
   confidence: number;
   description: string;
   snapshotUrl?: string;
   acknowledged: boolean;
+  personName?: string;
+  personRole?: "morador" | "familiar" | "visitante" | "prestador" | "desconhecido";
+  faceBox?: { x: number; y: number; width: number; height: number };
 }
 
 export interface StorageDisk {
@@ -405,14 +458,40 @@ export const INITIAL_DISKS: StorageDisk[] = [
 
 export const INITIAL_AI_EVENTS: AiSecurityEvent[] = [
   {
+    id: "evt-face-01",
+    cameraId: "cam_garagem__main",
+    cameraName: "Garagem Rua",
+    timestamp: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+    type: "face_recognized",
+    confidence: 0.98,
+    description: "Morador identificado: Eduardo (Reconhecimento Facial I.A. 98%)",
+    personName: "Eduardo (Morador)",
+    personRole: "morador",
+    faceBox: { x: 0.38, y: 0.22, width: 0.16, height: 0.24 },
+    acknowledged: false,
+  },
+  {
+    id: "evt-face-02",
+    cameraId: "cam_240__lens_1",
+    cameraName: "Câmera Tripla — Lente 1: Superior",
+    timestamp: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
+    type: "face_unknown",
+    confidence: 0.89,
+    description: "Rosto Não Cadastrado / Desconhecido detectado em frente à residência",
+    personName: "Pessoa Não Identificada",
+    personRole: "desconhecido",
+    faceBox: { x: 0.52, y: 0.31, width: 0.14, height: 0.22 },
+    acknowledged: false,
+  },
+  {
     id: "evt-01",
     cameraId: "cam-01",
     cameraName: "Entrada & Portão Principal",
-    timestamp: new Date(Date.now() - 4 * 60 * 1000).toISOString(),
+    timestamp: new Date(Date.now() - 24 * 60 * 1000).toISOString(),
     type: "human",
     confidence: 0.97,
     description: "Pessoa identificada aproximando-se do portão social",
-    acknowledged: false,
+    acknowledged: true,
   },
   {
     id: "evt-02",

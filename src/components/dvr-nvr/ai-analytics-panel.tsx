@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { 
   ShieldAlert, ShieldCheck, User, Car, Bell, BellOff, 
-  Settings2, Sliders, CheckCircle2, Eye, Zap, Volume2, Shield
+  Settings2, Sliders, CheckCircle2, Eye, Zap, Volume2, Shield, Users, Sparkles, Plus
 } from "lucide-react";
 import type { AiSecurityEvent, IpCamera } from "@/types/dvr-nvr";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -15,9 +15,11 @@ interface AiAnalyticsPanelProps {
   events: AiSecurityEvent[];
   cameras: IpCamera[];
   onAcknowledgeEvent: (id: string) => void;
+  onOpenFacialDialog?: () => void;
 }
 
-export function AiAnalyticsPanel({ events, cameras, onAcknowledgeEvent }: AiAnalyticsPanelProps) {
+export function AiAnalyticsPanel({ events, cameras, onAcknowledgeEvent, onOpenFacialDialog }: AiAnalyticsPanelProps) {
+  const [facialRecognitionActive, setFacialRecognitionActive] = useState<boolean>(true);
   const [filterType, setFilterType] = useState<string>("all");
   const [sensitivity, setSensitivity] = useState<number>(85);
   const [tripwireActive, setTripwireActive] = useState<boolean>(true);
@@ -57,6 +59,8 @@ export function AiAnalyticsPanel({ events, cameras, onAcknowledgeEvent }: AiAnal
           <div className="flex items-center gap-1.5">
             {[
               { id: "all", label: "Todos" },
+              { id: "face_recognized", label: "Moradores" },
+              { id: "face_unknown", label: "Desconhecidos" },
               { id: "human", label: "Pessoas" },
               { id: "vehicle", label: "Veículos" },
               { id: "tripwire", label: "Linha Virtual" },
@@ -95,6 +99,8 @@ export function AiAnalyticsPanel({ events, cameras, onAcknowledgeEvent }: AiAnal
                 <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                   <div className="flex items-start gap-3">
                     <div className="rounded-xl p-2.5 bg-background border shadow-sm shrink-0 mt-0.5 sm:mt-0">
+                      {evt.type === "face_recognized" && <Users className="size-5 text-emerald-500" />}
+                      {evt.type === "face_unknown" && <ShieldAlert className="size-5 text-amber-500" />}
                       {evt.type === "human" && <User className="size-5 text-emerald-500" />}
                       {evt.type === "vehicle" && <Car className="size-5 text-blue-500" />}
                       {evt.type === "tripwire" && <ShieldAlert className="size-5 text-rose-500" />}
@@ -106,14 +112,18 @@ export function AiAnalyticsPanel({ events, cameras, onAcknowledgeEvent }: AiAnal
                         <Badge
                           variant="outline"
                           className={
-                            evt.type === "human"
+                            evt.type === "face_recognized"
+                              ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/40 font-semibold"
+                              : evt.type === "face_unknown"
+                              ? "bg-amber-500/10 text-amber-500 border-amber-500/40 font-semibold"
+                              : evt.type === "human"
                               ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
                               : evt.type === "vehicle"
                               ? "bg-blue-500/10 text-blue-600 border-blue-500/30"
                               : "bg-rose-500/10 text-rose-600 border-rose-500/30"
                           }
                         >
-                          Confiança: {Math.round(evt.confidence * 100)}%
+                          {evt.type === "face_recognized" ? "Morador Reconhecido" : evt.type === "face_unknown" ? "Rosto Não Cadastrado" : `Confiança: ${Math.round(evt.confidence * 100)}%`}
                         </Badge>
                         {!evt.acknowledged && (
                           <Badge className="bg-amber-500 text-black font-bold text-[10px]">NOVO</Badge>
@@ -154,6 +164,28 @@ export function AiAnalyticsPanel({ events, cameras, onAcknowledgeEvent }: AiAnal
 
       {/* Right Column: AI Rules & Mask Settings */}
       <div className="space-y-6">
+        {/* Facial Recognition Management Banner */}
+        <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-950/40 via-teal-950/30 to-background border border-emerald-500/40 shadow-sm flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30 shrink-0">
+              <Users className="size-5" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-foreground">Base de Moradores & Rostos</p>
+              <p className="text-xs text-muted-foreground">Cadastre fotos para identificação ao vivo</p>
+            </div>
+          </div>
+          {onOpenFacialDialog && (
+            <Button
+              size="sm"
+              onClick={onOpenFacialDialog}
+              className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 font-semibold shrink-0"
+            >
+              <Sparkles className="size-3.5" /> Gerenciar
+            </Button>
+          )}
+        </div>
+
         {/* Detection Rules Card */}
         <Card>
           <CardHeader>
@@ -165,6 +197,14 @@ export function AiAnalyticsPanel({ events, cameras, onAcknowledgeEvent }: AiAnal
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold">Reconhecimento Facial (Face ID)</p>
+                <p className="text-xs text-muted-foreground">Identifica moradores e gera alerta para desconhecidos</p>
+              </div>
+              <Switch checked={facialRecognitionActive} onCheckedChange={setFacialRecognitionActive} />
+            </div>
+
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold">Detecção de Pessoas (Human)</p>
