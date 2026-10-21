@@ -6,7 +6,6 @@
 # 1. API Web, WebSocket e REST
 api:
   listen: ":1984"
-  # Habilita CORS irrestrito para permitir conexões do Lovable (https://casainteligenteai.lovable.app)
   origin: "*"
   base_path: ""
 
@@ -17,52 +16,58 @@ rtsp:
 # 3. Servidor WebRTC para streaming de baixíssima latência (sub-100ms)
 webrtc:
   listen: ":8555"
-  # Candidatos ICE para Docker no Windows: expor localhost e IP de LAN da máquina host
   candidates:
     - 127.0.0.1:8555
     - 192.168.0.117:8555
     - stun:8555
-  # STUN servers para travessia NAT se necessário
   ice_servers:
     - urls:
         - "stun:stun.l.google.com:19302"
         - "stun:stun1.l.google.com:19302"
 
-# 4. Transcoder FFmpeg com baixa latência e baseline para navegadores
+# 4. Transcoder FFmpeg com ganho de áudio de +14dB e áudio Opus para navegadores
 ffmpeg:
   bin: "ffmpeg"
   h264: "-c:v libx264 -preset ultrafast -tune zerolatency -profile:v baseline -level 3.0 -pix_fmt yuv420p -g 15"
+  opus: "-af volume=14dB,highpass=f=200,lowpass=f=3400 -c:a libopus -user_agent ffmpeg -ar 48000 -ac 1 -b:a 64k"
+  pcma: "-c:a pcm_alaw -ar 8000 -ac 1"
 
-# 5. Configuração de Streams (Câmeras IP Registradas)
-# Os fluxos podem ser definidos estaticamente aqui ou dinamicamente via API REST:
-# PUT http://localhost:1984/api/streams?name=garagem_rua&src=rtsp://admin:senha@192.168.0.139:554/onvif1
+# 5. Streams Otimizados: 1 Conexão Única por Câmera Física + Áudio Opus Transcodificado
 streams:
-  # Câmera Garagem Rua (Stream Original RTSP)
-  garagem_rua:
+  # Câmera Garagem Rua (192.168.0.139)
+  garagem_rua_src:
     - rtsp://admin:ambar786@192.168.0.139:554/onvif1
 
-  # Câmera Garagem Rua H.264 (Transcodificado com Áudio para WebRTC em navegadores Chrome/Edge)
-  garagem_rua_h264:
-    - ffmpeg:rtsp://127.0.0.1:8554/garagem_rua#video=h264#audio=copy
+  garagem_rua:
+    - rtsp://127.0.0.1:8554/garagem_rua_src
+    - "ffmpeg:rtsp://127.0.0.1:8554/garagem_rua_src#audio=opus"
 
-  # Câmera 192.168.0.198 (Stream Original RTSP)
-  cam_192_168_0_198:
+  garagem_rua_h264:
+    - ffmpeg:rtsp://127.0.0.1:8554/garagem_rua_src#video=h264#audio=opus
+
+  # Câmera 192.168.0.198 (Nativa H.264)
+  cam_192_168_0_198_src:
     - rtsp://admin:ambar786@192.168.0.198:554/onvif1
 
-  # Câmera 192.168.0.198 H.264
+  cam_192_168_0_198:
+    - rtsp://127.0.0.1:8554/cam_192_168_0_198_src
+    - "ffmpeg:rtsp://127.0.0.1:8554/cam_192_168_0_198_src#audio=opus"
+
   cam_192_168_0_198_h264:
-    - ffmpeg:rtsp://127.0.0.1:8554/cam_192_168_0_198#video=h264#audio=copy
+    - ffmpeg:rtsp://127.0.0.1:8554/cam_192_168_0_198_src#video=h264#audio=opus
 
-  # Câmera 192.168.0.240 (Câmera Tripla Multi-Lente 3 em 1 - 1920x3240 Full HD)
+  # Câmera 192.168.0.240 (Tripla 3 em 1 - Senha com URL Encode %40)
+  cam_192_168_0_240_src:
+    - rtsp://admin:ambar786%40@192.168.0.240:554/onvif1
+
   cam_192_168_0_240:
-    - rtsp://admin:ambar786@@192.168.0.240:554/onvif1
+    - rtsp://127.0.0.1:8554/cam_192_168_0_240_src
+    - "ffmpeg:rtsp://127.0.0.1:8554/cam_192_168_0_240_src#audio=opus"
 
-  # Câmera 192.168.0.240 H.264 (Transcodificado para navegadores sem suporte a HEVC)
   cam_192_168_0_240_h264:
-    - ffmpeg:rtsp://127.0.0.1:8554/cam_192_168_0_240#video=h264#audio=copy
+    - ffmpeg:rtsp://127.0.0.1:8554/cam_192_168_0_240_src#video=h264#audio=opus
 
-
-# 5. Configuração de Logs com Rotação
+# 6. Configuração de Logs
 log:
   level: "info"
   format: "text"

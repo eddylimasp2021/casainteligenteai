@@ -437,8 +437,6 @@ export function RealCameraPlayer({
           ? "garagem_rua_h264"
           : streamName === "cam_192_168_0_240"
           ? "cam_192_168_0_240_h264"
-          : streamName === "cam_192_168_0_198"
-          ? "cam_192_168_0_198_h264"
           : streamName;
       let targetUrl = `${gatewayBase}/api/webrtc?src=${encodeURIComponent(targetStream)}`;
 
