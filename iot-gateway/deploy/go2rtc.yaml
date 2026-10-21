@@ -25,49 +25,38 @@ webrtc:
         - "stun:stun.l.google.com:19302"
         - "stun:stun1.l.google.com:19302"
 
-# 4. Transcoder FFmpeg com ganho de áudio de +14dB e áudio Opus para navegadores
+# 4. Transcoder FFmpeg com baixa latência e baseline para navegadores
 ffmpeg:
   bin: "ffmpeg"
   h264: "-c:v libx264 -preset ultrafast -tune zerolatency -profile:v baseline -level 3.0 -pix_fmt yuv420p -g 15"
-  opus: "-af volume=14dB,highpass=f=200,lowpass=f=3400 -c:a libopus -user_agent ffmpeg -ar 48000 -ac 1 -b:a 64k"
-  pcma: "-c:a pcm_alaw -ar 8000 -ac 1"
 
-# 5. Streams Otimizados: 1 Conexão Única por Câmera Física + Áudio Opus Transcodificado
+# 5. Configuração de Streams (Câmeras IP Registradas)
 streams:
-  # Câmera Garagem Rua (192.168.0.139)
-  garagem_rua_src:
+  # Câmera Garagem Rua (Stream Original RTSP)
+  garagem_rua:
     - rtsp://admin:ambar786@192.168.0.139:554/onvif1
 
-  garagem_rua:
-    - rtsp://127.0.0.1:8554/garagem_rua_src
-    - "ffmpeg:rtsp://127.0.0.1:8554/garagem_rua_src#audio=opus"
-
+  # Câmera Garagem Rua H.264
   garagem_rua_h264:
-    - ffmpeg:rtsp://127.0.0.1:8554/garagem_rua_src#video=h264#audio=opus
+    - ffmpeg:rtsp://127.0.0.1:8554/garagem_rua#video=h264#audio=copy
 
-  # Câmera 192.168.0.198 (Nativa H.264)
-  cam_192_168_0_198_src:
+  # Câmera 192.168.0.198 (Stream Original RTSP)
+  cam_192_168_0_198:
     - rtsp://admin:ambar786@192.168.0.198:554/onvif1
 
-  cam_192_168_0_198:
-    - rtsp://127.0.0.1:8554/cam_192_168_0_198_src
-    - "ffmpeg:rtsp://127.0.0.1:8554/cam_192_168_0_198_src#audio=opus"
-
+  # Câmera 192.168.0.198 H.264
   cam_192_168_0_198_h264:
-    - ffmpeg:rtsp://127.0.0.1:8554/cam_192_168_0_198_src#video=h264#audio=opus
+    - ffmpeg:rtsp://127.0.0.1:8554/cam_192_168_0_198#video=h264#audio=copy
 
-  # Câmera 192.168.0.240 (Tripla 3 em 1 - Senha com URL Encode %40)
-  cam_192_168_0_240_src:
-    - rtsp://admin:ambar786%40@192.168.0.240:554/onvif1
-
+  # Câmera 192.168.0.240 (Câmera Tripla Multi-Lente 3 em 1 - 1920x3240 Full HD)
   cam_192_168_0_240:
-    - rtsp://127.0.0.1:8554/cam_192_168_0_240_src
-    - "ffmpeg:rtsp://127.0.0.1:8554/cam_192_168_0_240_src#audio=opus"
+    - rtsp://admin:ambar786@@192.168.0.240:554/onvif1
 
+  # Câmera 192.168.0.240 H.264 (Transcodificado para navegadores sem suporte a HEVC)
   cam_192_168_0_240_h264:
-    - ffmpeg:rtsp://127.0.0.1:8554/cam_192_168_0_240_src#video=h264#audio=opus
+    - ffmpeg:rtsp://127.0.0.1:8554/cam_192_168_0_240#video=h264#audio=copy
 
-# 6. Configuração de Logs
+# 6. Configuração de Logs com Rotação
 log:
   level: "info"
   format: "text"

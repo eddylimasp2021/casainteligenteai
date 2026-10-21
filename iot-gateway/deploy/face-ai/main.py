@@ -209,10 +209,21 @@ def save_events():
 # ---------------------------------------------------------------------------
 # Frame Capture from go2rtc
 # ---------------------------------------------------------------------------
+FRAME_CACHE = {}  # { camera_id: (timestamp, img) }
+FRAME_CACHE_LOCK = threading.Lock()
+
 def fetch_camera_frame(camera_id: str) -> np.ndarray:
     """
-    Downloads snapshot directly from local go2rtc container in milliseconds.
+    Downloads snapshot directly from local go2rtc container in milliseconds,
+    with 1.8s cache to deduplicate simultaneous multi-lens requests.
     """
+    now = time.time()
+    with FRAME_CACHE_LOCK:
+        if camera_id in FRAME_CACHE:
+            ts, cached_img = FRAME_CACHE[camera_id]
+            if now - ts < 1.8 and cached_img is not None:
+                return cached_img
+
     try:
         url = f"{GO2RTC_BASE}/api/frame.jpeg?src={camera_id}"
         req = urllib.request.Request(url, headers={"User-Agent": "HomePulse-FaceAI"})
@@ -221,6 +232,9 @@ def fetch_camera_frame(camera_id: str) -> np.ndarray:
                 raw_bytes = resp.read()
                 arr = np.frombuffer(raw_bytes, dtype=np.uint8)
                 img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+                if img is not None:
+                    with FRAME_CACHE_LOCK:
+                        FRAME_CACHE[camera_id] = (time.time(), img)
                 return img
     except Exception:
         pass
