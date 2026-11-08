@@ -15,14 +15,16 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { AIProviderConfigModal } from "@/components/ai/AIProviderConfigModal";
 import { AI_PROVIDERS, loadAIConfig, AIConfig } from "@/lib/ai-provider";
+import { MembersManagement } from "@/components/settings/MembersManagement";
+import { SaaSPlanCard } from "@/components/settings/SaaSPlanCard";
 
 export const Route = createFileRoute("/_app/settings")({
   head: () => ({
     meta: [
-      { title: "Ajustes — Casa Inteligente AI" },
-      { name: "description", content: "Perfil, residência e aparência do HomePulse AI." },
-      { property: "og:title", content: "Ajustes — Casa Inteligente AI" },
-      { property: "og:description", content: "Configurações da sua conta e residência." },
+      { title: "Ajustes & SaaS — Casa Inteligente AI" },
+      { name: "description", content: "Perfil, residência, membros, assinatura e aparência do HomePulse AI." },
+      { property: "og:title", content: "Ajustes & SaaS — Casa Inteligente AI" },
+      { property: "og:description", content: "Configurações da sua conta, residência e membros." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -30,7 +32,12 @@ export const Route = createFileRoute("/_app/settings")({
   component: SettingsPage,
 });
 
-const ROLE: Record<string, string> = { owner: "Proprietário", admin: "Administrador", member: "Membro", guest: "Convidado" };
+const ROLE: Record<string, string> = {
+  owner: "Proprietário",
+  admin: "Administrador",
+  member: "Morador",
+  guest: "Convidado",
+};
 
 function SettingsPage() {
   const { user } = useAuth();
@@ -56,9 +63,13 @@ function SettingsPage() {
     if (!current) return;
     const fd = new FormData(e.currentTarget);
     setBusy(true);
-    const { error } = await supabase.from("households").update({
-      name: String(fd.get("name")).trim(), address: String(fd.get("address")).trim() || null,
-    }).eq("id", current.id);
+    const { error } = await supabase
+      .from("households")
+      .update({
+        name: String(fd.get("name")).trim(),
+        address: String(fd.get("address")).trim() || null,
+      })
+      .eq("id", current.id);
     setBusy(false);
     if (error) return toast.error(friendlyError(error));
     await qc.invalidateQueries({ queryKey: ["households"] });
@@ -75,12 +86,31 @@ function SettingsPage() {
     navigate({ to: "/dashboard" });
   }
 
-  const themes: [ThemeChoice, string, typeof Sun][] = [["dark", "Escuro", Moon], ["light", "Claro", Sun], ["system", "Sistema", Monitor]];
+  const themes: [ThemeChoice, string, typeof Sun][] = [
+    ["dark", "Escuro", Moon],
+    ["light", "Claro", Sun],
+    ["system", "Sistema", Monitor],
+  ];
 
   return (
     <>
-      <PageHeader title="Ajustes" />
+      <PageHeader title="Ajustes & Administração" />
       <div className="grid gap-6 lg:grid-cols-2">
+        {/* Card do Plano SaaS & Exportação LGPD */}
+        {current && (
+          <SaaSPlanCard householdId={current.id} householdName={current.name} />
+        )}
+
+        {/* Gestão de Moradores e Membros */}
+        {current && (
+          <MembersManagement
+            householdId={current.id}
+            canAdmin={canAdmin}
+            currentUserRole={current.role}
+            currentUserId={user?.id}
+          />
+        )}
+
         {/* Inteligência Artificial & Provedores */}
         <section className="glass rounded-2xl p-6 lg:col-span-2 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -137,17 +167,30 @@ function SettingsPage() {
         <section className="glass rounded-2xl p-6">
           <h2 className="mb-1 text-lg font-semibold">Perfil</h2>
           <p className="text-sm text-muted-foreground">{user?.email}</p>
-          <p className="mt-1 text-sm">Seu papel nesta residência: <strong>{ROLE[current?.role ?? ""]}</strong></p>
-          <Button variant="secondary" className="mt-4" onClick={() => supabase.auth.signOut()}><LogOut className="size-4" /> Sair</Button>
+          <p className="mt-1 text-sm">
+            Seu papel nesta residência: <strong>{ROLE[current?.role ?? ""] || "Morador"}</strong>
+          </p>
+          <Button variant="secondary" className="mt-4" onClick={() => supabase.auth.signOut()}>
+            <LogOut className="size-4" /> Sair
+          </Button>
         </section>
 
         <section className="glass rounded-2xl p-6">
           <h2 className="mb-4 text-lg font-semibold">Aparência</h2>
           <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Tema">
             {themes.map(([k, l, Icon]) => (
-              <button key={k} role="radio" aria-checked={theme === k} onClick={() => setTheme(k)}
-                className={cn("flex flex-col items-center gap-2 rounded-xl border p-4 text-sm transition-colors", theme === k ? "border-primary bg-primary/10" : "hover:bg-muted")}>
-                <Icon className="size-5" />{l}
+              <button
+                key={k}
+                role="radio"
+                aria-checked={theme === k}
+                onClick={() => setTheme(k)}
+                className={cn(
+                  "flex flex-col items-center gap-2 rounded-xl border p-4 text-sm transition-colors",
+                  theme === k ? "border-primary bg-primary/10" : "hover:bg-muted"
+                )}
+              >
+                <Icon className="size-5" />
+                {l}
               </button>
             ))}
           </div>
@@ -157,13 +200,29 @@ function SettingsPage() {
           <section className="glass rounded-2xl p-6 lg:col-span-2">
             <h2 className="mb-4 text-lg font-semibold">Residência</h2>
             <form key={current.id} onSubmit={saveHousehold} className="grid gap-4 sm:grid-cols-2">
-              <div className="grid gap-2"><Label htmlFor="hn">Nome</Label><Input id="hn" name="name" defaultValue={current.name} disabled={!canAdmin} required /></div>
-              <div className="grid gap-2"><Label htmlFor="ha">Endereço</Label><Input id="ha" name="address" defaultValue={current.address ?? ""} disabled={!canAdmin} /></div>
-              <p className="text-sm text-muted-foreground">Fuso: {current.timezone} · Moeda: {current.currency}</p>
-              {canAdmin && <div className="flex justify-end gap-2 sm:col-span-2">
-                {current.role === "owner" && <Button type="button" variant="destructive" onClick={deleteHousehold}>Excluir residência</Button>}
-                <Button type="submit" disabled={busy}>Salvar</Button>
-              </div>}
+              <div className="grid gap-2">
+                <Label htmlFor="hn">Nome</Label>
+                <Input id="hn" name="name" defaultValue={current.name} disabled={!canAdmin} required />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="ha">Endereço</Label>
+                <Input id="ha" name="address" defaultValue={current.address ?? ""} disabled={!canAdmin} />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Fuso: {current.timezone} · Moeda: {current.currency}
+              </p>
+              {canAdmin && (
+                <div className="flex justify-end gap-2 sm:col-span-2">
+                  {current.role === "owner" && (
+                    <Button type="button" variant="destructive" onClick={deleteHousehold}>
+                      Excluir residência
+                    </Button>
+                  )}
+                  <Button type="submit" disabled={busy}>
+                    Salvar
+                  </Button>
+                </div>
+              )}
             </form>
           </section>
         )}
