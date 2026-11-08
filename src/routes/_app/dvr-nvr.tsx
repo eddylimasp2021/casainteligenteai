@@ -698,6 +698,7 @@ function DvrNvrPage() {
   });
 
 
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   // Target slots per grid mode: 1x1=1, 2x2=4, 3x2=6 (6 previews), 3x3=9
