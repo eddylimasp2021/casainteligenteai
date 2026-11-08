@@ -446,12 +446,14 @@ export interface SmartHomeAIContext {
   rooms: Array<{ id: string; name: string }>;
   cftvStatus: { isRecording: boolean; path: string; activeStreams: number };
   memories: Array<{ category: string; fact: string }>;
+  scenes?: Array<{ id: string; name: string; description: string }>;
 }
 
 export interface AIExecutionResult {
   text: string;
   actionTaken?: string;
   deviceToToggle?: { id: string; name: string; targetState: boolean };
+  sceneToActivate?: { id: string; name: string };
   latencyMs: number;
   providerUsed: string;
   modelUsed: string;
@@ -489,6 +491,7 @@ export async function generateAICompletion(
 
   const roomsSummary = context.rooms.map((r) => r.name).join(", ");
   const memoriesSummary = context.memories.map((m) => `[${m.category}] ${m.fact}`).join("\n");
+  const scenesSummary = (context.scenes || []).map((s) => `- Cena "${s.name}" (ID: ${s.id}): ${s.description}`).join("\n");
 
   const systemPrompt = `Você é o MARK-LV (JARVIS), a inteligência artificial central da Casa Inteligente AI (HomePulse AI).
 Seu tom de voz é cordial, refinado, altamente confiante, preciso e elegante como o assistente JARVIS. Chame o usuário ocasionalmente de "senhor" ou "senhora".
@@ -651,13 +654,33 @@ Se o usuário perguntar sobre o estado da casa, segurança ou câmeras, sintetiz
       } catch (e) {
         console.warn("Falha ao processar tag de ação da IA:", e);
       }
-      cleanText = rawOutput.replace(actionRegex, "").trim();
+      cleanText = cleanText.replace(actionRegex, "").trim();
+    }
+
+    let sceneToActivate: { id: string; name: string } | undefined;
+    const sceneRegex = /\[\[SCENE:\s*(\{.*?\})\s*\]\]/s;
+    const sceneMatch = rawOutput.match(sceneRegex);
+    if (sceneMatch) {
+      try {
+        const scObj = JSON.parse(sceneMatch[1] ?? "{}");
+        if (scObj.sceneId || scObj.id) {
+          sceneToActivate = {
+            id: scObj.sceneId || scObj.id,
+            name: scObj.sceneName || scObj.name || "Cena",
+          };
+          actionTaken = "Cena Ativada: " + sceneToActivate.name;
+        }
+      } catch (e) {
+        console.warn("Falha ao processar tag de cena da IA:", e);
+      }
+      cleanText = cleanText.replace(sceneRegex, "").trim();
     }
 
     return {
       text: cleanText || "Comando processado com sucesso.",
       actionTaken,
       deviceToToggle,
+      sceneToActivate,
       latencyMs: elapsed,
       providerUsed: meta.name,
       modelUsed: model,

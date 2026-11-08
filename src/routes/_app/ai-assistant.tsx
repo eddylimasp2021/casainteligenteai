@@ -20,6 +20,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { cn } from "@/lib/utils";
 import { AIProviderConfigModal } from "@/components/ai/AIProviderConfigModal";
 import { AiRoutineGeneratorDialog } from "@/components/automations/AiRoutineGeneratorDialog";
+import { getStoredScenes, activateScene } from "@/lib/scenes";
 import {
   AI_PROVIDERS,
   AIProviderId,
@@ -396,6 +397,7 @@ export function AIAssistantPage() {
     // Se a IA tiver chave configurada (ex: Google Gemini), envia para inferência real com contexto residencial
     if (hasKey) {
       try {
+        const scenesList = getStoredScenes(current?.id || "");
         const smartContext = {
           devices: deviceList.map((d) => ({
             id: d.id,
@@ -411,6 +413,7 @@ export function AIAssistantPage() {
             activeStreams: 3,
           },
           memories: memories.map((m) => ({ category: m.category, fact: m.fact })),
+          scenes: scenesList.map((s) => ({ id: s.id, name: s.name, description: s.description })),
         };
 
         const recentHistory = messages.slice(-4).map((m) => ({
@@ -420,6 +423,22 @@ export function AIAssistantPage() {
 
         const aiRes = await generateAICompletion(raw, smartContext, recentHistory);
         setLastLatency(aiRes.latencyMs);
+
+        // Se a IA decidiu ativar uma cena
+        if (aiRes.sceneToActivate) {
+          try {
+            const sc = scenesList.find(
+              (s) => s.id === aiRes.sceneToActivate!.id || s.name.toLowerCase().includes(aiRes.sceneToActivate!.name.toLowerCase())
+            );
+            if (sc) {
+              await activateScene(sc, deviceList);
+              queryClient.invalidateQueries({ queryKey: ["devices"] });
+              logAction(current?.id ?? "", `Mark-LV IA: Cena ativada (${sc.name})`);
+            }
+          } catch (e) {
+            console.warn("Falha ao ativar cena pela IA:", e);
+          }
+        }
 
         // Se a IA decidiu acionar ou desligar um dispositivo fisicamente
         if (aiRes.deviceToToggle) {
@@ -461,6 +480,26 @@ export function AIAssistantPage() {
       let reply = "";
       let actionTaken = "";
 
+      const scenesList = getStoredScenes(current?.id || "");
+      const matchedScene = scenesList.find(
+        (s) =>
+          lower.includes(s.name.toLowerCase()) ||
+          (s.id === "scene-cinema" && lower.includes("cinema")) ||
+          (s.id === "scene-sleep" && (lower.includes("dormir") || lower.includes("boa noite"))) ||
+          (s.id === "scene-good-morning" && lower.includes("bom dia")) ||
+          (s.id === "scene-leaving" && (lower.includes("sair") || lower.includes("saindo"))) ||
+          (s.id === "scene-arriving" && lower.includes("chegando"))
+      );
+
+      if (matchedScene) {
+        reply = `Com certeza, senhor. Ativando a cena "${matchedScene.name}" agora mesmo em todos os dispositivos.`;
+        actionTaken = `Cena Ativada: ${matchedScene.name}`;
+        try {
+          await activateScene(matchedScene, deviceList);
+          queryClient.invalidateQueries({ queryKey: ["devices"] });
+          logAction(current?.id ?? "", `Mark-LV Fallback: Cena ativada (${matchedScene.name})`);
+        } catch {}
+      }
       // 1. "Status geral" / "Como está a casa"
       if (lower.includes("status") || lower.includes("como está") || lower.includes("relatório") || lower.includes("resumo")) {
         const total = deviceList.length;

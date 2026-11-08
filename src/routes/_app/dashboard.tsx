@@ -9,6 +9,7 @@ import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/h
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { QuickScenesBar } from "@/components/scenes/QuickScenesBar";
 
 export const Route = createFileRoute("/_app/dashboard")({
   head: () => ({
@@ -77,6 +78,13 @@ function Dashboard() {
         <Stat icon={Cpu} label="Dispositivos" value={`${online}/${list.length}`} hint="online" tone="violet" />
         <Stat icon={Workflow} label="Ações hoje" value={String(today.data ?? 0)} hint="registradas no histórico" />
       </section>
+
+      {/* Cenas Rápidas */}
+      {current?.id && (
+        <section className="mt-6">
+          <QuickScenesBar householdId={current.id} devices={list} />
+        </section>
+      )}
 
       {/* Banner de Rotinas & Automações com IA */}
       <section className="mt-6 rounded-2xl border bg-gradient-to-r from-card via-card to-primary/10 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
