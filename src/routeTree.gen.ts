@@ -24,6 +24,8 @@ import { Route as AppHistoryRouteImport } from './routes/_app/history'
 import { Route as AppHomeAssistantRouteImport } from './routes/_app/home-assistant'
 import { Route as AppIntegrationsRouteImport } from './routes/_app/integrations'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
+import { Route as AppSecurityRouteImport } from './routes/_app/security'
+import { Route as AppEnergyRouteImport } from './routes/_app/energy'
 import { Route as AppRoomsIndexRouteImport } from './routes/_app/rooms.index'
 import { Route as AppRoomsIdRouteImport } from './routes/_app/rooms.$id'
 
@@ -101,6 +103,16 @@ const AppSettingsRoute = AppSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AppRoute,
 } as any)
+const AppSecurityRoute = AppSecurityRouteImport.update({
+  id: '/security',
+  path: '/security',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppEnergyRoute = AppEnergyRouteImport.update({
+  id: '/energy',
+  path: '/energy',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppRoomsIndexRoute = AppRoomsIndexRouteImport.update({
   id: '/rooms/',
   path: '/rooms/',
@@ -127,6 +139,10 @@ export interface FileRoutesByFullPath {
   '/home-assistant': typeof AppHomeAssistantRoute
   '/integrations': typeof AppIntegrationsRoute
   '/settings': typeof AppSettingsRoute
+  '/security': typeof AppSecurityRoute
+  '/energy': typeof AppEnergyRoute
+  '/security': typeof AppSecurityRoute
+  '/energy': typeof AppEnergyRoute
   '/rooms/$id': typeof AppRoomsIdRoute
   '/rooms/': typeof AppRoomsIndexRoute
 }
@@ -145,6 +161,8 @@ export interface FileRoutesByTo {
   '/home-assistant': typeof AppHomeAssistantRoute
   '/integrations': typeof AppIntegrationsRoute
   '/settings': typeof AppSettingsRoute
+  '/security': typeof AppSecurityRoute
+  '/energy': typeof AppEnergyRoute
   '/rooms/$id': typeof AppRoomsIdRoute
   '/rooms': typeof AppRoomsIndexRoute
 }
@@ -369,6 +387,8 @@ interface AppRouteChildren {
   AppHomeAssistantRoute: typeof AppHomeAssistantRoute
   AppIntegrationsRoute: typeof AppIntegrationsRoute
   AppSettingsRoute: typeof AppSettingsRoute
+  AppSecurityRoute: typeof AppSecurityRoute
+  AppEnergyRoute: typeof AppEnergyRoute
   AppRoomsIdRoute: typeof AppRoomsIdRoute
   AppRoomsIndexRoute: typeof AppRoomsIndexRoute
 }
@@ -384,6 +404,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppHomeAssistantRoute: AppHomeAssistantRoute,
   AppIntegrationsRoute: AppIntegrationsRoute,
   AppSettingsRoute: AppSettingsRoute,
+  AppSecurityRoute: AppSecurityRoute,
+  AppEnergyRoute: AppEnergyRoute,
   AppRoomsIdRoute: AppRoomsIdRoute,
   AppRoomsIndexRoute: AppRoomsIndexRoute,
 }

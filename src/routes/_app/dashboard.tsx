@@ -25,16 +25,45 @@ export const Route = createFileRoute("/_app/dashboard")({
   component: Dashboard,
 });
 
-function Stat({ icon: Icon, label, value, hint, tone = "primary" }: { icon: typeof Zap; label: string; value: string; hint?: string; tone?: "primary" | "cyan" | "violet" | "success" | "warning" | "destructive" }) {
-  const tones = { primary: "bg-primary/15 text-primary", cyan: "bg-cyan/15 text-cyan", violet: "bg-violet/15 text-violet", success: "bg-success/15 text-success", warning: "bg-warning/15 text-warning", destructive: "bg-destructive/15 text-destructive" };
-  return (
-    <div className="glass rounded-2xl p-4">
-      <div className={cn("mb-3 w-fit rounded-xl p-2", tones[tone])}><Icon className="size-5" aria-hidden /></div>
+function Stat({
+  icon: Icon,
+  label,
+  value,
+  hint,
+  tone = "primary",
+  to,
+}: {
+  icon: typeof Zap;
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: "primary" | "cyan" | "violet" | "success" | "warning" | "destructive";
+  to?: string;
+}) {
+  const tones = {
+    primary: "bg-primary/15 text-primary",
+    cyan: "bg-cyan/15 text-cyan",
+    violet: "bg-violet/15 text-violet",
+    success: "bg-success/15 text-success",
+    warning: "bg-warning/15 text-warning",
+    destructive: "bg-destructive/15 text-destructive",
+  };
+
+  const card = (
+    <div className={cn("glass rounded-2xl p-4 transition-all duration-200", to && "hover:border-primary/50 hover:shadow-xs cursor-pointer select-none")}>
+      <div className={cn("mb-3 w-fit rounded-xl p-2", tones[tone])}>
+        <Icon className="size-5" aria-hidden />
+      </div>
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="font-display text-2xl font-semibold tabular-nums">{value}</p>
       {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
+
+  if (to) {
+    return <Link to={to} className="block">{card}</Link>;
+  }
+  return card;
 }
 
 function Dashboard() {
@@ -45,8 +74,13 @@ function Dashboard() {
     queryKey: ["actions-today", current?.id],
     enabled: !!current,
     queryFn: async () => {
-      const start = new Date(); start.setHours(0, 0, 0, 0);
-      const { count } = await supabase.from("audit_logs").select("id", { count: "exact", head: true }).eq("household_id", current!.id).gte("created_at", start.toISOString());
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const { count } = await supabase
+        .from("audit_logs")
+        .select("id", { count: "exact", head: true })
+        .eq("household_id", current!.id)
+        .gte("created_at", start.toISOString());
       return count ?? 0;
     },
   });
@@ -73,10 +107,10 @@ function Dashboard() {
       <section aria-label="Resumo" className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Stat icon={Thermometer} label="Temperatura" value={avg("temperature") ? `${avg("temperature")}°C` : "—"} hint={sensors.length ? "média dos sensores" : "sem sensor"} />
         <Stat icon={Droplets} label="Umidade" value={avg("humidity") ? `${avg("humidity")}%` : "—"} tone="cyan" />
-        <Stat icon={Zap} label="Energia agora" value={`${power} W`} hint="tomadas com medição" tone="warning" />
-        <Stat icon={secIssue ? ShieldAlert : ShieldCheck} label="Segurança" value={security.length === 0 ? "—" : secIssue ? "Atenção" : "Protegida"} tone={security.length === 0 ? "primary" : secIssue ? "warning" : "success"} />
-        <Stat icon={Cpu} label="Dispositivos" value={`${online}/${list.length}`} hint="online" tone="violet" />
-        <Stat icon={Workflow} label="Ações hoje" value={String(today.data ?? 0)} hint="registradas no histórico" />
+        <Stat icon={Zap} label="Energia agora" value={`${power} W`} hint="ver telemetria e fatura" tone="warning" to="/energy" />
+        <Stat icon={secIssue ? ShieldAlert : ShieldCheck} label="Segurança" value={security.length === 0 ? "—" : secIssue ? "Atenção" : "Protegida"} hint="ver alarme e zonas" tone={security.length === 0 ? "primary" : secIssue ? "warning" : "success"} to="/security" />
+        <Stat icon={Cpu} label="Dispositivos" value={`${online}/${list.length}`} hint="online" tone="violet" to="/devices" />
+        <Stat icon={Workflow} label="Ações hoje" value={String(today.data ?? 0)} hint="registradas no histórico" to="/history" />
       </section>
 
       {/* Cenas Rápidas */}

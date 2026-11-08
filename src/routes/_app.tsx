@@ -1,13 +1,40 @@
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Home, LayoutGrid, Cpu, History, Settings, LogOut, Wifi, WifiOff, Check, ChevronsUpDown, Plus, Radio, Server, Cctv, Sparkles, SlidersHorizontal, Workflow, PanelLeftOpen, PanelLeftClose } from "lucide-react";
+import {
+  Home,
+  LayoutGrid,
+  Cpu,
+  History,
+  Settings,
+  LogOut,
+  Wifi,
+  WifiOff,
+  Check,
+  ChevronsUpDown,
+  Plus,
+  Radio,
+  Server,
+  Cctv,
+  Sparkles,
+  SlidersHorizontal,
+  Workflow,
+  PanelLeftOpen,
+  PanelLeftClose,
+  ShieldCheck,
+  Zap,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { HouseholdProvider, useHousehold } from "@/lib/household";
 import { LoadingState, Logo } from "@/components/home/ui-states";
 import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useOnline } from "@/hooks/use-online";
 
@@ -18,6 +45,8 @@ const NAV = [
   { to: "/rooms", label: "Cômodos", icon: LayoutGrid },
   { to: "/devices", label: "Dispositivos", icon: Cpu },
   { to: "/automations", label: "Automações", icon: Workflow },
+  { to: "/security", label: "Segurança", icon: ShieldCheck },
+  { to: "/energy", label: "Energia", icon: Zap },
   { to: "/home-assistant", label: "Home Assistant", icon: SlidersHorizontal },
   { to: "/ai-assistant", label: "Assistente IA", icon: Sparkles },
   { to: "/dvr-nvr", label: "DVR / NVR", icon: Cctv },
@@ -30,9 +59,15 @@ const NAV = [
 function AppLayout() {
   const { session, loading } = useAuth();
   const navigate = useNavigate();
-  useEffect(() => { if (!loading && !session) navigate({ to: "/login", replace: true }); }, [loading, session, navigate]);
+  useEffect(() => {
+    if (!loading && !session) navigate({ to: "/login", replace: true });
+  }, [loading, session, navigate]);
   if (loading || !session) return <LoadingState />;
-  return <HouseholdProvider><Shell /></HouseholdProvider>;
+  return (
+    <HouseholdProvider>
+      <Shell />
+    </HouseholdProvider>
+  );
 }
 
 function Shell() {
@@ -44,71 +79,141 @@ function Shell() {
   const [menuOverride, setMenuOverride] = useState<{ pathname: string; open: boolean } | null>(null);
   const menuOpen = menuOverride?.pathname === pathname ? menuOverride.open : pathname !== "/dvr-nvr";
 
-  useEffect(() => { if (!loading && households.length === 0) navigate({ to: "/onboarding", replace: true }); }, [loading, households.length, navigate]);
+  useEffect(() => {
+    if (!loading && households.length === 0) navigate({ to: "/onboarding", replace: true });
+  }, [loading, households.length, navigate]);
   if (loading || !current) return <LoadingState />;
 
   return (
     <div className="min-h-screen md:flex">
       {/* Sidebar: compact on tablet, full on desktop */}
-      <aside id="app-side-menu" className={`sticky top-0 hidden h-screen shrink-0 flex-col border-r bg-sidebar backdrop-blur-xl md:w-20 lg:w-64 ${menuOpen ? "md:flex" : ""}`}>
-        <div className="p-4 lg:p-5"><Logo withText={false} className="lg:hidden justify-center" /><Logo className="hidden lg:flex" /></div>
-        <nav className="flex-1 space-y-1 px-3" aria-label="Principal">
+      <aside
+        id="app-side-menu"
+        className={`sticky top-0 hidden h-screen shrink-0 flex-col border-r bg-sidebar backdrop-blur-xl md:w-20 lg:w-64 ${
+          menuOpen ? "md:flex" : ""
+        }`}
+      >
+        <div className="p-4 lg:p-5">
+          <Logo withText={false} className="lg:hidden justify-center" />
+          <Logo className="hidden lg:flex" />
+        </div>
+        <nav className="flex-1 space-y-1 px-3 overflow-y-auto" aria-label="Principal">
           {NAV.map(({ to, label, icon: Icon }) => (
-            <Link key={to} to={to} title={label}
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground md:justify-center lg:justify-start"
-              activeProps={{ className: "bg-sidebar-accent text-sidebar-foreground font-semibold" }}>
-              <Icon className="size-5 shrink-0" aria-hidden /><span className="md:sr-only lg:not-sr-only">{label}</span>
+            <Link
+              key={to}
+              to={to}
+              title={label}
+              className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground md:justify-center lg:justify-start"
+              activeProps={{ className: "bg-sidebar-accent text-sidebar-foreground font-semibold" }}
+            >
+              <Icon className="size-5 shrink-0" aria-hidden />
+              <span className="md:sr-only lg:not-sr-only">{label}</span>
             </Link>
           ))}
         </nav>
         <div className="p-3">
-          <Button variant="ghost" className="w-full md:justify-center lg:justify-start" onClick={() => supabase.auth.signOut()} title="Sair">
-            <LogOut className="size-5" /><span className="md:sr-only lg:not-sr-only">Sair</span>
+          <Button
+            variant="ghost"
+            className="w-full md:justify-center lg:justify-start"
+            onClick={() => supabase.auth.signOut()}
+            title="Sair"
+          >
+            <LogOut className="size-5" />
+            <span className="md:sr-only lg:not-sr-only">Sair</span>
           </Button>
         </div>
       </aside>
 
       <div className="min-w-0 flex-1 pb-24 md:pb-0">
         <header className="sticky top-0 z-30 flex items-center gap-3 border-b bg-background/70 px-4 py-3 backdrop-blur-xl sm:px-6">
-          <Button variant="ghost" size="icon" className="hidden shrink-0 md:inline-flex" aria-label={menuOpen ? "Ocultar menu lateral" : "Mostrar menu lateral"} title={menuOpen ? "Ocultar menu lateral" : "Mostrar menu lateral"} aria-expanded={menuOpen} aria-controls="app-side-menu" onClick={() => setMenuOverride({ pathname, open: !menuOpen })}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="hidden shrink-0 md:inline-flex"
+            aria-label={menuOpen ? "Ocultar menu lateral" : "Mostrar menu lateral"}
+            title={menuOpen ? "Ocultar menu lateral" : "Mostrar menu lateral"}
+            aria-expanded={menuOpen}
+            aria-controls="app-side-menu"
+            onClick={() => setMenuOverride({ pathname, open: !menuOpen })}
+          >
             {menuOpen ? <PanelLeftClose className="size-5" /> : <PanelLeftOpen className="size-5" />}
           </Button>
           <Logo withText={false} className="md:hidden" />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="min-w-0 max-w-[60vw] justify-between gap-2 px-2 sm:max-w-xs">
-                <span className="truncate font-semibold">{current.name}</span><ChevronsUpDown className="size-4 opacity-60" />
+              <Button
+                variant="ghost"
+                className="min-w-0 max-w-[60vw] justify-between gap-2 px-2 sm:max-w-xs"
+              >
+                <span className="truncate font-semibold">{current.name}</span>
+                <ChevronsUpDown className="size-4 opacity-60" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-64">
               <DropdownMenuLabel>Residências</DropdownMenuLabel>
               {households.map((h) => (
                 <DropdownMenuItem key={h.id} onClick={() => setCurrentId(h.id)}>
-                  <span className="flex-1 truncate">{h.name}</span>{h.id === current.id && <Check className="size-4" />}
+                  <span className="flex-1 truncate">{h.name}</span>
+                  {h.id === current.id && <Check className="size-4" />}
                 </DropdownMenuItem>
               ))}
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate({ to: "/onboarding" })}><Plus className="size-4" /> Nova residência</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate({ to: "/onboarding" })}>
+                <Plus className="size-4" /> Nova residência
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          {current.is_demo && <span className="hidden rounded-full bg-violet/15 px-2 py-0.5 text-xs text-violet sm:inline">Modo demonstração</span>}
-          <div className="ml-auto flex items-center gap-3">
-            <span className={online ? "flex items-center gap-1.5 text-xs text-success" : "flex items-center gap-1.5 text-xs text-destructive"} role="status">
-              {online ? <Wifi className="size-4" /> : <WifiOff className="size-4" />}<span className="hidden sm:inline">{online ? "Conectado" : "Sem conexão"}</span>
+          {current.is_demo && (
+            <span className="hidden rounded-full bg-violet/15 px-2 py-0.5 text-xs text-violet sm:inline">
+              Modo demonstração
             </span>
-            <Link to="/settings" aria-label="Perfil" className="grid size-9 place-items-center rounded-full bg-primary/15 text-sm font-semibold uppercase text-primary">
+          )}
+          <div className="ml-auto flex items-center gap-3">
+            <span
+              className={
+                online
+                  ? "flex items-center gap-1.5 text-xs text-success"
+                  : "flex items-center gap-1.5 text-xs text-destructive"
+              }
+              role="status"
+            >
+              {online ? <Wifi className="size-4" /> : <WifiOff className="size-4" />}
+              <span className="hidden sm:inline">{online ? "Conectado" : "Sem conexão"}</span>
+            </span>
+            <Link
+              to="/settings"
+              aria-label="Perfil"
+              className="grid size-9 place-items-center rounded-full bg-primary/15 text-sm font-semibold uppercase text-primary"
+            >
               {(user?.email ?? "?").slice(0, 1)}
             </Link>
           </div>
         </header>
-        {!online && <div role="alert" className="bg-destructive/15 px-4 py-2 text-center text-sm text-destructive">Sem conexão. Os controles voltam a funcionar quando a internet retornar.</div>}
-        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8"><Outlet /></main>
+        {!online && (
+          <div
+            role="alert"
+            className="bg-destructive/15 px-4 py-2 text-center text-sm text-destructive"
+          >
+            Sem conexão. Os controles voltam a funcionar quando a internet retornar.
+          </div>
+        )}
+        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
+          <Outlet />
+        </main>
       </div>
 
       {/* Mobile bottom navigation */}
-      <nav aria-label="Navegação inferior" className="fixed inset-x-0 bottom-0 z-40 flex overflow-x-auto border-t bg-background/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden px-1">
+      <nav
+        aria-label="Navegação inferior"
+        className="fixed inset-x-0 bottom-0 z-40 flex overflow-x-auto border-t bg-background/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden px-1"
+      >
         {NAV.map(({ to, label, icon: Icon }) => (
-          <Link key={to} to={to} className="flex min-w-[62px] flex-1 flex-col items-center gap-1 py-2 text-[9px] text-muted-foreground text-center" activeProps={{ className: "text-primary font-semibold" }}>
+          <Link
+            key={to}
+            to={to}
+            className="flex min-w-[58px] flex-1 flex-col items-center gap-1 py-2 text-[9px] text-muted-foreground text-center"
+            activeProps={{ className: "text-primary font-semibold" }}
+          >
             <Icon className="size-4 shrink-0" aria-hidden />
             <span className="truncate w-full px-0.5">{label}</span>
           </Link>
