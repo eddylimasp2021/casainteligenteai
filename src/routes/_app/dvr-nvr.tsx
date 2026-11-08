@@ -793,6 +793,34 @@ function DvrNvrPage() {
     toast.success("Posição do mosaico reordenada com sucesso!");
   };
 
+  // Assign a specific camera (or empty) to a mosaic position and persist it
+  const assignSlot = (index: number, cameraId: string) => {
+    const current = orderedSlots.map((item, idx) => (item ? item.id : `empty_${idx}`));
+    const prevIdx = cameraId ? current.indexOf(cameraId) : -1;
+    if (prevIdx >= 0) current[prevIdx] = current[index] ?? `empty_${prevIdx}`;
+    current[index] = cameraId || `empty_${index}`;
+    const newOrder = current.map((id, idx) => (id.startsWith("empty_") ? `empty_${idx}` : id));
+    setGridOrder(newOrder);
+    localStorage.setItem(GRID_ORDER_STORAGE_KEY, JSON.stringify(newOrder));
+    toast.success(`Posição ${index + 1} do mosaico salva.`);
+  };
+
+  const renderSlotPicker = (index: number, currentId: string) =>
+    gridMode === "1x1" ? null : (
+      <select
+        aria-label={`Câmera da posição ${index + 1}`}
+        value={currentId}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => assignSlot(index, e.target.value)}
+        className="absolute top-2 right-2 z-30 max-w-[55%] h-7 rounded-md bg-background/85 backdrop-blur-md border border-border text-xs text-foreground px-1.5"
+      >
+        <option value="">— Vazio —</option>
+        {gridChannels.map((c) => (
+          <option key={c.id} value={c.id}>{c.name}</option>
+        ))}
+      </select>
+    );
+
   const handleDragEnd = () => {
     setDraggedIndex(null);
     setDragOverIndex(null);
@@ -1196,8 +1224,9 @@ function DvrNvrPage() {
                       }`}
                       title="Quadro Preto (Canal Vazio). Arraste uma câmera para cá para trocar a posição."
                     >
+                      {renderSlotPicker(index, "")}
                       {/* OSD Header */}
-                      <div className="flex items-center justify-between z-10">
+                      <div className="flex items-center justify-between z-10 pr-32">
                         <div className="flex items-center gap-2">
                           <Badge variant="outline" className="bg-neutral-900/90 text-neutral-400 border-neutral-700 font-mono text-xs">
                             CH {String(index + 1).padStart(2, "0")}
@@ -1262,6 +1291,7 @@ function DvrNvrPage() {
                         : ""
                     }`}
                   >
+                    {renderSlotPicker(index, camera.id)}
                     {/* Floating Drag Handle Badge */}
                     <div
                       className="absolute top-2 left-2 z-20 flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/70 hover:bg-black/90 backdrop-blur-md border border-white/10 text-[10px] font-mono text-neutral-300 cursor-grab active:cursor-grabbing select-none shadow-md opacity-80 group-hover:opacity-100 transition-opacity"
