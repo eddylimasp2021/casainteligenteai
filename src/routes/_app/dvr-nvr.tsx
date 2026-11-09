@@ -159,13 +159,13 @@ function DvrNvrPage() {
       if (saved) {
         const parsed: StorageConfig = JSON.parse(saved);
         let changed = false;
-        // Strict guard: drive C has critical low space (3.6 GB), enforce Drive D:
-        if (!parsed.recordingsDirectory || /^c:/i.test(parsed.recordingsDirectory)) {
+        // Permite salvar em qualquer disco escolhido pelo usuario (C:, D:, E:, etc)
+        if (!parsed.recordingsDirectory) {
           parsed.recordingsDirectory = "D:\\Gravacoes_CFTV";
           changed = true;
         }
-        if (!parsed.snapshotsDirectory || /^c:/i.test(parsed.snapshotsDirectory)) {
-          parsed.snapshotsDirectory = "D:\\Gravacoes_CFTV\\Snapshots";
+        if (!parsed.snapshotsDirectory) {
+          parsed.snapshotsDirectory = `${parsed.recordingsDirectory}\\Snapshots`;
           changed = true;
         }
         if (changed) {

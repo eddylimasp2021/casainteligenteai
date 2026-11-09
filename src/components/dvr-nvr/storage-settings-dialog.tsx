@@ -175,10 +175,11 @@ export function StorageSettingsDialog({
     let cleanRec = recordingsDirectory.trim() || "D:\\Gravacoes_CFTV";
     let cleanSnap = snapshotsDirectory.trim() || "D:\\Gravacoes_CFTV\\Snapshots";
 
-    if (/^c:/i.test(cleanRec)) {
+    // Identifica e valida o disco selecionado pelo usuario (C:, D:, E:, etc)
+    const driveMatch = cleanRec.match(/^([A-Za-z]:)/);
+    const driveLetter = driveMatch ? driveMatch[1].toUpperCase() : 'D:';
       toast.warning("A Unidade C: possui espaço crítico. Redirecionando automaticamente para a Unidade D:!");
       cleanRec = "D:\\Gravacoes_CFTV";
-    }
     if (/^c:/i.test(cleanSnap)) {
       cleanSnap = "D:\\Gravacoes_CFTV\\Snapshots";
     }
@@ -221,7 +222,7 @@ export function StorageSettingsDialog({
       onUpdateDisks(updatedDisks);
     }
 
-    toast.success("Configurações de gravação salvas na Unidade D:!", {
+    toast.success(`Configurações de gravação salvas na Unidade ${driveLetter}!`, {
       description: `Vídeos salvos em: ${newConfig.recordingsDirectory} • Fotos em: ${newConfig.snapshotsDirectory}`,
     });
 
@@ -337,48 +338,54 @@ export function StorageSettingsDialog({
                   placeholder="Ex: D:\Gravacoes_CFTV"
                   className="font-mono text-xs"
                 />
-                <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                  <span className="text-[11px] text-muted-foreground">Sugestões rápidas:</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRecordingsDirectory("D:\\Gravacoes_CFTV");
-                      setSnapshotsDirectory("D:\\Gravacoes_CFTV\\Snapshots");
-                    }}
-                    className="px-2 py-0.5 rounded bg-muted hover:bg-primary/20 hover:text-primary text-[10px] font-mono border border-border/60 transition-colors"
-                  >
-                    D:\Gravacoes_CFTV (Recomendado)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRecordingsDirectory("D:\\CFTV_Archive");
-                      setSnapshotsDirectory("D:\\CFTV_Archive\\Snapshots");
-                    }}
-                    className="px-2 py-0.5 rounded bg-muted hover:bg-primary/20 hover:text-primary text-[10px] font-mono border border-border/60 transition-colors"
-                  >
-                    D:\CFTV_Archive
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRecordingsDirectory("E:\\NVR_Storage");
-                      setSnapshotsDirectory("E:\\NVR_Storage\\Snapshots");
-                    }}
-                    className="px-2 py-0.5 rounded bg-muted hover:bg-primary/20 hover:text-primary text-[10px] font-mono border border-border/60 transition-colors"
-                  >
-                    E:\NVR_Storage
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRecordingsDirectory("\\\\192.168.0.200\\cctv_storage");
-                      setSnapshotsDirectory("\\\\192.168.0.200\\cctv_storage\\Snapshots");
-                    }}
-                    className="px-2 py-0.5 rounded bg-muted hover:bg-primary/20 hover:text-primary text-[10px] font-mono border border-border/60 transition-colors"
-                  >
-                    \\NAS\cctv_storage
-                  </button>
+                <div className="space-y-1.5 pt-1">
+                  <span className="text-[11px] font-semibold text-foreground">Discos Físicos do Computador (1-Clique para Escolher):</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRecordingsDirectory("C:\\Gravacoes_CFTV");
+                        setSnapshotsDirectory("C:\\Gravacoes_CFTV\\Snapshots");
+                      }}
+                      className="p-2 rounded-lg bg-card/80 hover:bg-primary/10 border border-border/80 hover:border-primary/60 text-left transition-all"
+                    >
+                      <div className="font-bold text-xs flex items-center justify-between">
+                        <span>💾 Disco C:\</span>
+                        <Badge variant="outline" className="text-[9px] py-0 border-emerald-500/40 text-emerald-400">501 GB livres</Badge>
+                      </div>
+                      <div className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate">C:\Gravacoes_CFTV</div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRecordingsDirectory("D:\\Gravacoes_CFTV");
+                        setSnapshotsDirectory("D:\\Gravacoes_CFTV\\Snapshots");
+                      }}
+                      className="p-2 rounded-lg bg-card/80 hover:bg-primary/10 border border-border/80 hover:border-primary/60 text-left transition-all"
+                    >
+                      <div className="font-bold text-xs flex items-center justify-between">
+                        <span>💾 Disco D:\</span>
+                        <Badge variant="outline" className="text-[9px] py-0 border-blue-500/40 text-blue-400">117 GB livres</Badge>
+                      </div>
+                      <div className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate">D:\Gravacoes_CFTV</div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRecordingsDirectory("E:\\Gravacoes_CFTV");
+                        setSnapshotsDirectory("E:\\Gravacoes_CFTV\\Snapshots");
+                      }}
+                      className="p-2 rounded-lg bg-card/80 hover:bg-primary/10 border border-border/80 hover:border-primary/60 text-left transition-all"
+                    >
+                      <div className="font-bold text-xs flex items-center justify-between">
+                        <span>💾 Disco E:\ (2.8 TB)</span>
+                        <Badge variant="outline" className="text-[9px] py-0 border-purple-500/40 text-purple-400">120 GB livres</Badge>
+                      </div>
+                      <div className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate">E:\Gravacoes_CFTV</div>
+                    </button>
+                  </div>
                 </div>
               </div>
 
