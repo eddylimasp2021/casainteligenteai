@@ -42,7 +42,10 @@ import {
   Users,
   X,
   Eye,
+  EyeOff,
   Settings,
+  Minimize2,
+  Tv2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -625,7 +628,42 @@ function DvrNvrPage() {
   // Stream Quality
   const [streamQuality, setStreamQuality] = useState<"main" | "sub">("main");
 
-  // Dialog states
+  // Modo Monitor Profissional (Oculta barras e maximiza quadros)
+  const [isProfessionalView, setIsProfessionalView] = useState(() => {
+    try {
+      return localStorage.getItem("homepulse_dvr_pro_view_v1") === "true";
+    } catch {}
+    return false;
+  });
+
+  const toggleProfessionalView = () => {
+    setIsProfessionalView((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("homepulse_dvr_pro_view_v1", String(next));
+      } catch {}
+      if (next) {
+        toast.info("Modo DVR Profissional ativado! Pressione ESC ou o botão flutuante para restaurar.");
+      } else {
+        toast.info("Barras de ferramentas restauradas.");
+      }
+      return next;
+    });
+  };
+
+  // Esc key restores normal view
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isProfessionalView) {
+        setIsProfessionalView(false);
+        try {
+          localStorage.setItem("homepulse_dvr_pro_view_v1", "false");
+        } catch {}
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isProfessionalView]);
   const [isCameraManagerOpen, setIsCameraManagerOpen] = useState(false);
   const [cameraToEdit, setCameraToEdit] = useState<IpCamera | null>(null);
   const [ptzCamera, setPtzCamera] = useState<IpCamera | null>(null);
@@ -1056,144 +1094,167 @@ function DvrNvrPage() {
   };
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* Top Header & Status Metrics */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <Cctv className="size-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                  DVR / NVR — Central de Vigilância IP
-                </h1>
-                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                  Sistema Operacional
-                </Badge>
+    <div className={`space-y-6 ${isProfessionalView ? "p-0 space-y-0" : "pb-12"}`}>
+      {/* Botão Flutuante de Recuperação no Modo DVR Profissional */}
+      {isProfessionalView && (
+        <div className="fixed top-3 right-4 z-50 flex items-center gap-2 bg-black/80 hover:bg-black/95 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20 shadow-2xl transition-all">
+          <Badge variant="outline" className="bg-primary/20 text-primary border-primary/40 font-mono text-[10px]">
+            MODO DVR PROFISSIONAL
+          </Badge>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={toggleProfessionalView}
+            className="h-6 px-2 text-xs text-white hover:text-primary gap-1"
+            title="Sair do modo tela cheia e restaurar os menus (ESC)"
+          >
+            <Eye className="size-3.5" />
+            <span>Sair (ESC)</span>
+          </Button>
+        </div>
+      )}
+
+      {/* Top Header & Status Metrics (Ocultos no Modo Profissional) */}
+      {!isProfessionalView && (
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Cctv className="size-6" />
               </div>
-              <p className="text-sm text-muted-foreground">
-                CFTV profissional, mosaico multiview, detecção por Inteligência Artificial e linha do tempo 24h
-              </p>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                    DVR / NVR — Central de Vigilância IP
+                  </h1>
+                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                    Sistema Operacional
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  CFTV profissional, mosaico multiview, detecção por Inteligência Artificial e linha do tempo 24h
+                </p>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Quick Actions */}
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant={isSirenActive ? "destructive" : "outline"}
-            size="sm"
-            onClick={handleToggleSiren}
-            className={`gap-1.5 ${isSirenActive ? "animate-pulse font-bold" : "text-red-400 border-red-500/30 hover:bg-red-500/10"}`}
-          >
-            <ShieldAlert className="size-4" />
-            {isSirenActive ? "DESATIVAR SIRENE" : "Sirene Pânico"}
-          </Button>
+          {/* Quick Actions */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant={isSirenActive ? "destructive" : "outline"}
+              size="sm"
+              onClick={handleToggleSiren}
+              className={`gap-1.5 ${isSirenActive ? "animate-pulse font-bold" : "text-red-400 border-red-500/30 hover:bg-red-500/10"}`}
+            >
+              <ShieldAlert className="size-4" />
+              {isSirenActive ? "DESATIVAR SIRENE" : "Sirene Pânico"}
+            </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRecordAll}
-            className="gap-1.5 text-xs text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
-          >
-            <Video className="size-4" />
-            REC Todos
-          </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRecordAll}
+              className="gap-1.5 text-xs text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+            >
+              <Video className="size-4" />
+              REC Todos
+            </Button>
 
-          {/* Multi-Lens Cameras Configuration Button */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsMultiLensModalOpen(true)}
-            className="gap-1.5 text-xs border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary font-semibold shadow-sm"
-            title="Configurar câmeras com múltiplas lentes / visões (Ex: 192.168.0.240 com 3 telas)"
-          >
-            <Layers className="size-4" />
-            Multi-Lente (3 Visões)
-          </Button>
+            {/* Multi-Lens Cameras Configuration Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsMultiLensModalOpen(true)}
+              className="gap-1.5 text-xs border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary font-semibold shadow-sm"
+              title="Configurar câmeras com múltiplas lentes / visões (Ex: 192.168.0.240 com 3 telas)"
+            >
+              <Layers className="size-4" />
+              Multi-Lente (3 Visões)
+            </Button>
 
-          {/* Facial Recognition Management Button */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsFacialModalOpen(true)}
-            className="gap-1.5 text-xs border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-semibold shadow-sm"
-            title="Cadastrar e gerenciar moradores e reconhecimento facial por IA"
-          >
-            <Users className="size-4" />
-            Reconhecimento Facial
-          </Button>
+            {/* Facial Recognition Management Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsFacialModalOpen(true)}
+              className="gap-1.5 text-xs border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-semibold shadow-sm"
+              title="Cadastrar e gerenciar moradores e reconhecimento facial por IA"
+            >
+              <Users className="size-4" />
+              Reconhecimento Facial
+            </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsStorageSettingsOpen(true)}
-            className="gap-1.5 text-xs"
-          >
-            <HardDrive className="size-4" />
-            Discos ({usedPercent}%)
-          </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsStorageSettingsOpen(true)}
+              className="gap-1.5 text-xs"
+            >
+              <HardDrive className="size-4" />
+              Discos ({usedPercent}%)
+            </Button>
 
-          <Button
-            size="sm"
-            onClick={() => {
-              setCameraToEdit(null);
-              setIsCameraManagerOpen(true);
-            }}
-            className="gap-1.5 text-xs"
-          >
-            <Plus className="size-4" />
-            Adicionar Câmera
-          </Button>
-        </div>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="rounded-xl border border-border/60 bg-card/60 p-3.5 space-y-1">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Canais Operacionais</span>
-            <Cctv className="size-4 text-primary" />
+            <Button
+              size="sm"
+              onClick={() => {
+                setCameraToEdit(null);
+                setIsCameraManagerOpen(true);
+              }}
+              className="gap-1.5 text-xs"
+            >
+              <Plus className="size-4" />
+              Adicionar Câmera
+            </Button>
           </div>
-          <div className="text-xl font-bold text-foreground">
-            {onlineCamerasCount} / {cameras.length}
-          </div>
-          <p className="text-[11px] text-emerald-400">100% dos streams estáveis</p>
         </div>
+      )}
 
-        <div className="rounded-xl border border-border/60 bg-card/60 p-3.5 space-y-1">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Taxa de Dados / Bitrate</span>
-            <Radio className="size-4 text-primary" />
+      {/* KPI Cards (Ocultos no Modo Profissional) */}
+      {!isProfessionalView && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="rounded-xl border border-border/60 bg-card/60 p-3.5 space-y-1">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Canais Operacionais</span>
+              <Cctv className="size-4 text-primary" />
+            </div>
+            <div className="text-xl font-bold text-foreground">
+              {onlineCamerasCount} / {cameras.length}
+            </div>
+            <p className="text-[11px] text-emerald-400">100% dos streams estáveis</p>
           </div>
-          <div className="text-xl font-bold text-foreground">{totalBitrateMbps} Mbps</div>
-          <p className="text-[11px] text-muted-foreground">Compressão Smart H.265+</p>
-        </div>
 
-        <div className="rounded-xl border border-border/60 bg-card/60 p-3.5 space-y-1">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Retenção NVR</span>
-            <HardDrive className="size-4 text-primary" />
+          <div className="rounded-xl border border-border/60 bg-card/60 p-3.5 space-y-1">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Taxa de Dados / Bitrate</span>
+              <Radio className="size-4 text-primary" />
+            </div>
+            <div className="text-xl font-bold text-foreground">{totalBitrateMbps} Mbps</div>
+            <p className="text-[11px] text-muted-foreground">Compressão Smart H.265+</p>
           </div>
-          <div className="text-xl font-bold text-foreground">30 Dias</div>
-          <p className="text-[11px] text-muted-foreground">Loop FIFO • S.M.A.R.T. OK</p>
-        </div>
 
-        <div className="rounded-xl border border-border/60 bg-card/60 p-3.5 space-y-1">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Eventos I.A. Recentes</span>
-            <Cpu className="size-4 text-purple-400" />
+          <div className="rounded-xl border border-border/60 bg-card/60 p-3.5 space-y-1">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Retenção NVR</span>
+              <HardDrive className="size-4 text-primary" />
+            </div>
+            <div className="text-xl font-bold text-foreground">30 Dias</div>
+            <p className="text-[11px] text-muted-foreground">Loop FIFO • S.M.A.R.T. OK</p>
           </div>
-          <div className="text-xl font-bold text-foreground">{aiEvents.length}</div>
-          <p className="text-[11px] text-purple-400">Pessoas & Veículos detectados</p>
+
+          <div className="rounded-xl border border-border/60 bg-card/60 p-3.5 space-y-1">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Eventos I.A. Recentes</span>
+              <Cpu className="size-4 text-purple-400" />
+            </div>
+            <div className="text-xl font-bold text-foreground">{aiEvents.length}</div>
+            <p className="text-[11px] text-purple-400">Pessoas & Veículos detectados</p>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Main Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-2">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className={`space-y-4 ${isProfessionalView ? "space-y-0" : ""}`}>
+        <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-2 ${isProfessionalView ? "hidden" : ""}`}>
           <TabsList className="bg-muted/40 p-1">
             <TabsTrigger value="live" className="gap-1.5 text-xs sm:text-sm">
               <Video className="size-4" />
@@ -1333,6 +1394,35 @@ function DvrNvrPage() {
                 </Button>
               </div>
 
+              {/* Modo DVR Profissional (Ocultar Barras e Maximizar Quadros) */}
+              <Button
+                variant={isProfessionalView ? "secondary" : "outline"}
+                size="sm"
+                onClick={toggleProfessionalView}
+                className={`h-7 px-2.5 text-xs font-semibold gap-1.5 transition-all ${
+                  isProfessionalView
+                    ? "bg-primary text-primary-foreground shadow-md ring-1 ring-primary"
+                    : "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+                }`}
+                title={
+                  isProfessionalView
+                    ? "Restaurar barras e menus normais (ESC)"
+                    : "Ocultar barras e expandir os quadros das câmeras na tela cheia"
+                }
+              >
+                {isProfessionalView ? (
+                  <>
+                    <Eye className="size-3.5" />
+                    <span>Mostrar Menus</span>
+                  </>
+                ) : (
+                  <>
+                    <Tv2 className="size-3.5" />
+                    <span>Modo DVR Profissional</span>
+                  </>
+                )}
+              </Button>
+
               {/* Botão Adicionar Tela ao Mosaico */}
               <Button
                 variant="outline"
@@ -1386,8 +1476,8 @@ function DvrNvrPage() {
 
         {/* TAB 1: Live Mosaic View */}
         <TabsContent value="live" className="m-0 space-y-4">
-          {/* Gateway Disconnected Warning Banner with 1-Click Reconnect */}
-          {(isGatewayUnreachable || !gatewayUrl) && (
+          {/* Gateway Disconnected Warning Banner with 1-Click Reconnect (Oculto no Modo Profissional se conectado) */}
+          {!isProfessionalView && (isGatewayUnreachable || !gatewayUrl) && (
             <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-200 shadow-sm">
               <div className="flex items-center gap-2.5">
                 <ShieldAlert className="size-5 text-amber-400 shrink-0" />
@@ -1481,12 +1571,20 @@ function DvrNvrPage() {
           ) : (
             /* Standard Grid Layout (1x1, 2x2, 3x2 6 Canais, 3x3) com Arrastar & Soltar e Quadros Pretos */
             <div
-              className={`grid gap-4 ${
-                gridMode === "1x1"
-                  ? "grid-cols-1 max-w-5xl mx-auto"
+              className={`grid transition-all duration-300 ${
+                isProfessionalView
+                  ? gridMode === "1x1"
+                    ? "grid-cols-1 w-full h-[95vh] gap-1"
+                    : gridMode === "2x2"
+                    ? "grid-cols-2 h-[95vh] gap-1.5"
+                    : gridMode === "3x3"
+                    ? "grid-cols-3 h-[95vh] gap-1.5"
+                    : "grid-cols-3 h-[95vh] gap-1.5"
+                  : gridMode === "1x1"
+                  ? "grid-cols-1 max-w-5xl mx-auto gap-4"
                   : gridMode === "2x2"
-                  ? "grid-cols-1 md:grid-cols-2"
-                  : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+                  ? "grid-cols-1 md:grid-cols-2 gap-4"
+                  : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
               }`}
             >
               {orderedSlots.map((camera, index) => {
