@@ -78,9 +78,14 @@ import { MultiLensConfigDialog } from "@/components/dvr-nvr/multi-lens-config-di
 import { FacialRecognitionDialog } from "@/components/dvr-nvr/facial-recognition-dialog";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useHousehold } from "@/lib/household";
+
 
 export const Route = createFileRoute("/_app/dvr-nvr")({
+  validateSearch: (search: Record<string, unknown>): { gateway?: string } => {
+    return {
+      gateway: typeof search.gateway === "string" ? search.gateway : undefined,
+    };
+  },
   head: () => ({
     meta: [
       { title: "DVR / NVR — Videomonitoramento IP & CFTV | Casa Inteligente AI" },
@@ -143,7 +148,10 @@ function getCanonicalCameraKey(cam: { id?: string; name?: string; ip?: string; s
 }
 
 function DvrNvrPage() {
-  const { current } = useHousehold();
+  let currentId: string | null = null;
+  try {
+    currentId = localStorage.getItem("hp-household");
+  } catch {}
   // Storage Configuration state (Where to save recordings and snapshots - strictly Drive D:)
   const [storageConfig, setStorageConfig] = useState<StorageConfig>(() => {
     try {
@@ -400,7 +408,7 @@ function DvrNvrPage() {
 
   // Sincronização em nuvem do Gateway CFTV para todas as máquinas e dispositivos
   const syncGatewayToCloud = async (urlToSave: string, hId?: string) => {
-    const householdId = hId || current?.id;
+    const householdId = hId || currentId;
     if (!householdId || !urlToSave) return;
     const clean = urlToSave.trim().replace(/\/+$/, "");
     try {
@@ -463,7 +471,7 @@ function DvrNvrPage() {
     } catch {}
 
     // Candidato 3: Supabase Cloud para esta residência
-    if (current?.id) {
+    if (currentId) {
       try {
         const { data } = await supabase
           .from("devices")
@@ -513,7 +521,7 @@ function DvrNvrPage() {
       try {
         localStorage.setItem("homepulse_dvr_gateway_url_v1", workingUrl);
       } catch {}
-      if (current?.id) {
+      if (currentId) {
         syncGatewayToCloud(workingUrl, current.id);
       }
       if (!silent) {
@@ -547,19 +555,16 @@ function DvrNvrPage() {
         } catch {}
         toast.success("Gateway CFTV sincronizado via 1-Clique!", { description: clean });
 
-        params.delete("gateway");
-        const remaining = params.toString();
-        const newUrl = window.location.pathname + (remaining ? `?${remaining}` : "");
-        window.history.replaceState({}, "", newUrl);
+// Query param loaded successfully into state
 
-        if (current?.id) {
+        if (currentId) {
           syncGatewayToCloud(clean, current.id);
         }
         return;
       }
     }
 
-    if (current?.id) {
+    if (currentId) {
       supabase
         .from("devices")
         .select("ip_address, state")
@@ -582,7 +587,7 @@ function DvrNvrPage() {
         })
         .catch((e) => console.warn("[DVR] Falha ao carregar gateway da nuvem", e));
     }
-  }, [current?.id]);
+  }, [currentId]);
 
   // Monitora a saúde da conexão com o gateway
   useEffect(() => {
@@ -2029,7 +2034,6 @@ function DvrNvrPage() {
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      handleAutoDiscoverGateway(false);
                       handleAutoDiscoverGateway(false);
                     }}
                     className="h-7 text-[11px] gap-1.5 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10"
