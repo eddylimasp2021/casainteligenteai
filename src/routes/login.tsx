@@ -67,8 +67,25 @@ function LoginPage() {
   }
 
   async function google() {
-    const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
-    if (r.error) toast.error("Não foi possível entrar com o Google.");
+    try {
+      const isCustomDomainOrVercel = !window.location.origin.includes("lovable.app");
+      
+      if (isCustomDomainOrVercel) {
+        // Fluxo direto via Supabase Auth oficial (sem dependência do Lovable Cloud proxy)
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: {
+            redirectTo: `${window.location.origin}/dashboard`,
+          },
+        });
+        if (error) throw error;
+      } else {
+        const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
+        if (r.error) toast.error("Não foi possível entrar com o Google.");
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Não foi possível entrar com o Google.");
+    }
   }
 
   const titles: Record<Mode, string> = { signin: "Bem-vindo de volta", signup: "Criar sua conta", forgot: "Recuperar senha" };
