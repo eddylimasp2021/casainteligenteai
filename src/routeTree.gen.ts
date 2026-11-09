@@ -19,13 +19,13 @@ import { Route as AppAutomationsRouteImport } from './routes/_app/automations'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppDevicesRouteImport } from './routes/_app/devices'
 import { Route as AppDvrNvrRouteImport } from './routes/_app/dvr-nvr'
+import { Route as AppEnergyRouteImport } from './routes/_app/energy'
 import { Route as AppGatewaysRouteImport } from './routes/_app/gateways'
 import { Route as AppHistoryRouteImport } from './routes/_app/history'
 import { Route as AppHomeAssistantRouteImport } from './routes/_app/home-assistant'
 import { Route as AppIntegrationsRouteImport } from './routes/_app/integrations'
-import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppSecurityRouteImport } from './routes/_app/security'
-import { Route as AppEnergyRouteImport } from './routes/_app/energy'
+import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppRoomsIndexRouteImport } from './routes/_app/rooms.index'
 import { Route as AppRoomsIdRouteImport } from './routes/_app/rooms.$id'
 
@@ -78,6 +78,11 @@ const AppDvrNvrRoute = AppDvrNvrRouteImport.update({
   path: '/dvr-nvr',
   getParentRoute: () => AppRoute,
 } as any)
+const AppEnergyRoute = AppEnergyRouteImport.update({
+  id: '/energy',
+  path: '/energy',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppGatewaysRoute = AppGatewaysRouteImport.update({
   id: '/gateways',
   path: '/gateways',
@@ -98,19 +103,14 @@ const AppIntegrationsRoute = AppIntegrationsRouteImport.update({
   path: '/integrations',
   getParentRoute: () => AppRoute,
 } as any)
-const AppSettingsRoute = AppSettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppSecurityRoute = AppSecurityRouteImport.update({
   id: '/security',
   path: '/security',
   getParentRoute: () => AppRoute,
 } as any)
-const AppEnergyRoute = AppEnergyRouteImport.update({
-  id: '/energy',
-  path: '/energy',
+const AppSettingsRoute = AppSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => AppRoute,
 } as any)
 const AppRoomsIndexRoute = AppRoomsIndexRouteImport.update({
@@ -134,15 +134,13 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AppDashboardRoute
   '/devices': typeof AppDevicesRoute
   '/dvr-nvr': typeof AppDvrNvrRoute
+  '/energy': typeof AppEnergyRoute
   '/gateways': typeof AppGatewaysRoute
   '/history': typeof AppHistoryRoute
   '/home-assistant': typeof AppHomeAssistantRoute
   '/integrations': typeof AppIntegrationsRoute
+  '/security': typeof AppSecurityRoute
   '/settings': typeof AppSettingsRoute
-  '/security': typeof AppSecurityRoute
-  '/energy': typeof AppEnergyRoute
-  '/security': typeof AppSecurityRoute
-  '/energy': typeof AppEnergyRoute
   '/rooms/$id': typeof AppRoomsIdRoute
   '/rooms/': typeof AppRoomsIndexRoute
 }
@@ -156,13 +154,13 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AppDashboardRoute
   '/devices': typeof AppDevicesRoute
   '/dvr-nvr': typeof AppDvrNvrRoute
+  '/energy': typeof AppEnergyRoute
   '/gateways': typeof AppGatewaysRoute
   '/history': typeof AppHistoryRoute
   '/home-assistant': typeof AppHomeAssistantRoute
   '/integrations': typeof AppIntegrationsRoute
-  '/settings': typeof AppSettingsRoute
   '/security': typeof AppSecurityRoute
-  '/energy': typeof AppEnergyRoute
+  '/settings': typeof AppSettingsRoute
   '/rooms/$id': typeof AppRoomsIdRoute
   '/rooms': typeof AppRoomsIndexRoute
 }
@@ -178,10 +176,12 @@ export interface FileRoutesById {
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/devices': typeof AppDevicesRoute
   '/_app/dvr-nvr': typeof AppDvrNvrRoute
+  '/_app/energy': typeof AppEnergyRoute
   '/_app/gateways': typeof AppGatewaysRoute
   '/_app/history': typeof AppHistoryRoute
   '/_app/home-assistant': typeof AppHomeAssistantRoute
   '/_app/integrations': typeof AppIntegrationsRoute
+  '/_app/security': typeof AppSecurityRoute
   '/_app/settings': typeof AppSettingsRoute
   '/_app/rooms/$id': typeof AppRoomsIdRoute
   '/_app/rooms/': typeof AppRoomsIndexRoute
@@ -198,10 +198,12 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/devices'
     | '/dvr-nvr'
+    | '/energy'
     | '/gateways'
     | '/history'
     | '/home-assistant'
     | '/integrations'
+    | '/security'
     | '/settings'
     | '/rooms/$id'
     | '/rooms/'
@@ -216,10 +218,12 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/devices'
     | '/dvr-nvr'
+    | '/energy'
     | '/gateways'
     | '/history'
     | '/home-assistant'
     | '/integrations'
+    | '/security'
     | '/settings'
     | '/rooms/$id'
     | '/rooms'
@@ -235,10 +239,12 @@ export interface FileRouteTypes {
     | '/_app/dashboard'
     | '/_app/devices'
     | '/_app/dvr-nvr'
+    | '/_app/energy'
     | '/_app/gateways'
     | '/_app/history'
     | '/_app/home-assistant'
     | '/_app/integrations'
+    | '/_app/security'
     | '/_app/settings'
     | '/_app/rooms/$id'
     | '/_app/rooms/'
@@ -324,6 +330,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDvrNvrRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/energy': {
+      id: '/_app/energy'
+      path: '/energy'
+      fullPath: '/energy'
+      preLoaderRoute: typeof AppEnergyRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/gateways': {
       id: '/_app/gateways'
       path: '/gateways'
@@ -350,6 +363,13 @@ declare module '@tanstack/react-router' {
       path: '/integrations'
       fullPath: '/integrations'
       preLoaderRoute: typeof AppIntegrationsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/security': {
+      id: '/_app/security'
+      path: '/security'
+      fullPath: '/security'
+      preLoaderRoute: typeof AppSecurityRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/settings': {
@@ -382,13 +402,13 @@ interface AppRouteChildren {
   AppDashboardRoute: typeof AppDashboardRoute
   AppDevicesRoute: typeof AppDevicesRoute
   AppDvrNvrRoute: typeof AppDvrNvrRoute
+  AppEnergyRoute: typeof AppEnergyRoute
   AppGatewaysRoute: typeof AppGatewaysRoute
   AppHistoryRoute: typeof AppHistoryRoute
   AppHomeAssistantRoute: typeof AppHomeAssistantRoute
   AppIntegrationsRoute: typeof AppIntegrationsRoute
-  AppSettingsRoute: typeof AppSettingsRoute
   AppSecurityRoute: typeof AppSecurityRoute
-  AppEnergyRoute: typeof AppEnergyRoute
+  AppSettingsRoute: typeof AppSettingsRoute
   AppRoomsIdRoute: typeof AppRoomsIdRoute
   AppRoomsIndexRoute: typeof AppRoomsIndexRoute
 }
@@ -399,13 +419,13 @@ const AppRouteChildren: AppRouteChildren = {
   AppDashboardRoute: AppDashboardRoute,
   AppDevicesRoute: AppDevicesRoute,
   AppDvrNvrRoute: AppDvrNvrRoute,
+  AppEnergyRoute: AppEnergyRoute,
   AppGatewaysRoute: AppGatewaysRoute,
   AppHistoryRoute: AppHistoryRoute,
   AppHomeAssistantRoute: AppHomeAssistantRoute,
   AppIntegrationsRoute: AppIntegrationsRoute,
-  AppSettingsRoute: AppSettingsRoute,
   AppSecurityRoute: AppSecurityRoute,
-  AppEnergyRoute: AppEnergyRoute,
+  AppSettingsRoute: AppSettingsRoute,
   AppRoomsIdRoute: AppRoomsIdRoute,
   AppRoomsIndexRoute: AppRoomsIndexRoute,
 }

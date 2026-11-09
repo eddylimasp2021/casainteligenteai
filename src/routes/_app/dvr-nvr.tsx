@@ -478,7 +478,7 @@ function DvrNvrPage() {
         const { data } = await supabase
           .from("devices")
           .select("ip_address, state")
-          .eq("household_id", current.id)
+          .eq("household_id", currentId)
           .eq("device_type", "cftv_gateway")
           .maybeSingle();
         const cloudUrl = (data?.state as any)?.gateway_url || data?.ip_address;
@@ -524,7 +524,7 @@ function DvrNvrPage() {
         localStorage.setItem("homepulse_dvr_gateway_url_v1", workingUrl);
       } catch {}
       if (currentId) {
-        syncGatewayToCloud(workingUrl, current.id);
+        syncGatewayToCloud(workingUrl, currentId);
       }
       if (!silent) {
         toast.success("Gateway CFTV detectado e reconectado com sucesso!", {
@@ -560,7 +560,7 @@ function DvrNvrPage() {
 // Query param loaded successfully into state
 
         if (currentId) {
-          syncGatewayToCloud(clean, current.id);
+          syncGatewayToCloud(clean, currentId);
         }
         return;
       }
@@ -570,7 +570,7 @@ function DvrNvrPage() {
       supabase
         .from("devices")
         .select("ip_address, state")
-        .eq("household_id", current.id)
+        .eq("household_id", currentId)
         .eq("device_type", "cftv_gateway")
         .maybeSingle()
         .then(({ data }) => {
@@ -586,8 +586,7 @@ function DvrNvrPage() {
               } catch {}
             }
           }
-        })
-        .catch((e) => console.warn("[DVR] Falha ao carregar gateway da nuvem", e));
+        });
     }
   }, [currentId]);
 
