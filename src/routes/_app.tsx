@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useOnline } from "@/hooks/use-online";
 import { PwaInstallPrompt } from "@/components/home/PwaInstallPrompt";
+import { NotificationsBell } from "@/components/home/NotificationsBell";
 
 export const Route = createFileRoute("/_app")({ component: AppLayout });
 
@@ -181,6 +182,7 @@ function Shell() {
               {online ? <Wifi className="size-4" /> : <WifiOff className="size-4" />}
               <span className="hidden sm:inline">{online ? "Conectado" : "Sem conexão"}</span>
             </span>
+            <NotificationsBell />
             <Link
               to="/settings"
               aria-label="Perfil"
