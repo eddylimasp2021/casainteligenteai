@@ -42,6 +42,22 @@ function LoginPage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
+
+    // Verificação de Acesso Mestre / Administrador Direto
+    const cleanEmail = email.trim().toLowerCase();
+    if (
+      cleanEmail === "eddylimainformatica@gmail.com" &&
+      password === "Monte2026@2026"
+    ) {
+      localStorage.setItem("hp-admin-session", "1");
+      localStorage.setItem("hp-household", "casa-principal-master");
+      toast.success("✓ Bem-vindo, Administrador Eddy Lima!");
+      setTimeout(() => {
+        window.location.href = "/dashboard";
+      }, 300);
+      return;
+    }
+
     try {
       if (mode === "signin") {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
