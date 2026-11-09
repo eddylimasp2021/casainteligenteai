@@ -36,14 +36,14 @@ describe("Fase 2: Motor de Cenas Inteligentes", () => {
 
   it("deve alternar status de favorita em uma cena", () => {
     const scenes = getStoredScenes("hh-123");
-    const target = scenes[0];
+    const target = scenes[0]!;
     const initialFav = target.isFavorite;
 
     const newFav = toggleSceneFavorite("hh-123", target.id);
     expect(newFav).toBe(!initialFav);
 
     const updated = getStoredScenes("hh-123");
-    expect(updated[0].isFavorite).toBe(!initialFav);
+    expect(updated[0]!.isFavorite).toBe(!initialFav);
   });
 
   it("deve salvar e atualizar uma nova cena personalizada", () => {
@@ -83,11 +83,11 @@ describe("Fase 4: Sistema de Segurança e Alarme Perimetral", () => {
     expect(armedState.mode).toBe("armed_away");
     expect(armedState.changedBy).toBe("Tester");
     expect(armedState.alerts.length).toBeGreaterThan(0);
-    expect(armedState.alerts[0].title).toContain("Modo Ausente");
+    expect(armedState.alerts[0]!.title).toContain("Modo Ausente");
   });
 
   it("deve mapear dispositivos para zonas de segurança", () => {
-    const mockDevices: Device[] = [
+    const mockDevices = [
       {
         id: "dev-lock-1",
         household_id: "hh-sec",
@@ -132,9 +132,9 @@ describe("Fase 4: Sistema de Segurança e Alarme Perimetral", () => {
         serial_number: null,
         vendor: "Tuya",
       },
-    ];
+    ] as any as Device[];
 
-    const mockRooms: Room[] = [
+    const mockRooms = [
       {
         id: "room-1",
         household_id: "hh-sec",
@@ -143,18 +143,18 @@ describe("Fase 4: Sistema de Segurança e Alarme Perimetral", () => {
         sort_order: 1,
         created_at: "",
       },
-    ];
+    ] as any as Room[];
 
     const zones = buildSecurityZones(mockDevices, mockRooms);
     expect(zones.length).toBe(2);
-    expect(zones[0].type).toBe("lock");
-    expect(zones[0].status).toBe("secure");
+    expect(zones[0]!.type).toBe("lock");
+    expect(zones[0]!.status).toBe("secure");
   });
 
   it("deve permitir reconhecer alertas de segurança", async () => {
     const armed = await setAlarmMode("hh-sec", "panic", "Morador");
-    const alertId = armed.alerts[0].id;
-    expect(armed.alerts[0].acknowledged).toBe(false);
+    const alertId = armed.alerts[0]!.id;
+    expect(armed.alerts[0]!.acknowledged).toBe(false);
 
     acknowledgeAlert("hh-sec", alertId);
     const updated = getSecurityState("hh-sec");
@@ -165,7 +165,7 @@ describe("Fase 4: Sistema de Segurança e Alarme Perimetral", () => {
 
 describe("Fase 4: Motor de Telemetria de Energia", () => {
   it("deve calcular demanda instantânea e projeção mensal de custo", () => {
-    const mockDevices: Device[] = [
+    const mockDevices = [
       {
         id: "dev-ac-1",
         household_id: "hh-1",
@@ -210,7 +210,7 @@ describe("Fase 4: Motor de Telemetria de Energia", () => {
         serial_number: null,
         vendor: "Philips Hue",
       },
-    ];
+    ] as any as Device[];
 
     const overview = calculateEnergyOverview(mockDevices, [], 0.85);
 
@@ -221,7 +221,7 @@ describe("Fase 4: Motor de Telemetria de Energia", () => {
     expect(overview.categoryShares.length).toBeGreaterThan(0);
 
     // O ar condicionado deve ser identificado como maior consumidor
-    expect(overview.deviceBreakdown[0].deviceId).toBe("dev-ac-1");
-    expect(overview.deviceBreakdown[0].isHighConsumer).toBe(true);
+    expect(overview.deviceBreakdown[0]!.deviceId).toBe("dev-ac-1");
+    expect(overview.deviceBreakdown[0]!.isHighConsumer).toBe(true);
   });
 });
