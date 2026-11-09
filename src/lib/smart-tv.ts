@@ -50,7 +50,7 @@ export const SMART_TV_PRESETS: SmartTvPreset[] = [
 ];
 
 const STORAGE_LG_KEY = "homepulse_lg_client_key";
-const DEFAULT_SAVED_KEY = "c8708eb7cd1845c6aacec78f6cdc370d";
+const DEFAULT_SAVED_KEY = "b52bd229ae8d4df8c3a5e8d1825a14b4";
 export const DEFAULT_TV_TUNNEL_GATEWAY = "";
 
 import { callHassService, getStoredHassConfig } from "./home-assistant";

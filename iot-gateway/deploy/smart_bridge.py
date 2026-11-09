@@ -10,7 +10,7 @@ from urllib.parse import urlparse, parse_qs
 
 # Configuration
 PORT = 1985
-DEFAULT_LG_KEY = "c8708eb7cd1845c6aacec78f6cdc370d"
+DEFAULT_LG_KEY = "b52bd229ae8d4df8c3a5e8d1825a14b4"
 DEFAULT_TV_IP = "192.168.0.168"
 DEFAULT_TV_MAC = "c4:36:6c:40:84:ac"
 
