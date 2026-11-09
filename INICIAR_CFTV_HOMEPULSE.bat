@@ -1,102 +1,82 @@
 @echo off
-title HomePulse AI - Gateway CFTV
+title HomePulse AI - Iniciar CFTV 1-Clique
 color 0A
 chcp 65001 >nul
 
-echo ==========================================================
-echo        HOMEPULSE AI - GATEWAY DE CAMERAS CFTV
-echo ==========================================================
+echo ==============================================================================
+echo           HOMEPULSE AI - GATEWAY CFTV PROFISSIONAL (1-CLIQUE)
+echo ==============================================================================
 echo.
-echo [1/3] Verificando Docker Desktop e motor de containers...
+echo [1/4] Finalizando instâncias anteriores para liberar portas...
+taskkill /F /IM "go2rtc.exe" >nul 2>&1
+taskkill /F /IM "cloudflared.exe" >nul 2>&1
+timeout /t 1 /nobreak >nul
 
-:: Limpeza preventiva de restos de instaladores temporarios do Docker no Drive C
-rd /s /q "%TEMP%\DockerDesktopInstallers" >nul 2>&1
-rd /s /q "%TEMP%\DockerDesktopUpdates" >nul 2>&1
+set "BASE_DIR=%~dp0iot-gateway\deploy"
+set "BIN_DIR=%BASE_DIR%\bin"
+set "GO2RTC_BIN=%BIN_DIR%\go2rtc.exe"
+set "CLOUDFLARED_BIN=%BIN_DIR%\cloudflared.exe"
+set "CONFIG_FILE=%BASE_DIR%\go2rtc.yaml"
+set "LOG_FILE=%BIN_DIR%\tunnel.log"
 
-:: Teste rapido: se o Docker ja esta 100% responsivo, pula direto para os servicos
-docker version >nul 2>&1
-if "%ERRORLEVEL%"=="0" (
-    echo [OK] Motor do Docker ja esta operacional e pronto!
-    goto DOCKER_READY
+if not exist "%BIN_DIR%" mkdir "%BIN_DIR%"
+
+echo [2/4] Verificando executáveis nativos (Zero dependência de Docker)...
+if not exist "%GO2RTC_BIN%" (
+    echo [i] Baixando go2rtc nativo para Windows...
+    powershell -NoProfile -Command "Invoke-WebRequest -Uri 'https://github.com/AlexxIT/go2rtc/releases/download/v1.9.8/go2rtc_win64.zip' -OutFile '%BIN_DIR%\go2rtc.zip'; Expand-Archive -Path '%BIN_DIR%\go2rtc.zip' -DestinationPath '%BIN_DIR%' -Force; Remove-Item '%BIN_DIR%\go2rtc.zip' -Force"
 )
 
-:: Verifica se a GUI do Docker Desktop esta aberta
-tasklist /FI "IMAGENAME eq Docker Desktop.exe" 2>NUL | find /I /N "Docker Desktop.exe">NUL
-if "%ERRORLEVEL%"=="0" goto CHECK_ENGINE
-
-echo [i] Docker Desktop fechado. Iniciando agora...
-start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
-echo Aguarde enquanto o Docker inicializa no Windows...
-
-:CHECK_ENGINE
-set /a TRIES=0
-
-:RETRY_ENGINE
-docker version >nul 2>&1
-if "%ERRORLEVEL%"=="0" (
-    echo [OK] Motor do Docker esta pronto e operacional!
-    goto DOCKER_READY
+if not exist "%CLOUDFLARED_BIN%" (
+    echo [i] Baixando cloudflared nativo para Windows...
+    powershell -NoProfile -Command "Invoke-WebRequest -Uri 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe' -OutFile '%CLOUDFLARED_BIN%'"
 )
 
-set /a TRIES=%TRIES%+1
-if %TRIES% GEQ 15 (
+echo [OK] Executáveis prontos!
+echo.
+
+echo [3/4] Iniciando Gateway de Mídia RTSP/WebRTC (go2rtc)...
+start "go2rtc_gateway" /MIN "%GO2RTC_BIN%" -config "%CONFIG_FILE%"
+timeout /t 2 /nobreak >nul
+
+echo [4/4] Gerando Túnel Seguro Cloudflare HTTPS...
+if exist "%LOG_FILE%" del /F /Q "%LOG_FILE%" >nul 2>&1
+start "cloudflared_tunnel" /MIN cmd /c ""%CLOUDFLARED_BIN%" tunnel --url http://127.0.0.1:1984 > "%LOG_FILE%" 2>&1"
+
+echo Aguardando link HTTPS seguro do túnel...
+set "TUNNEL_URL="
+for /L %%i in (1,1,15) do (
+    if not defined TUNNEL_URL (
+        for /f "tokens=*" %%a in ('powershell -NoProfile -Command "if (Test-Path '%LOG_FILE%') { $m = (Get-Content '%LOG_FILE%' | Select-String -Pattern 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' | Select-Object -Last 1); if ($m) { $m.Matches[0].Value } }"') do (
+            set "TUNNEL_URL=%%a"
+        )
+        if not defined TUNNEL_URL timeout /t 1 /nobreak >nul
+    )
+)
+
+echo.
+echo ==============================================================================
+if defined TUNNEL_URL (
+    echo [SUCESSO] Gateway CFTV online e conectado!
     echo.
-    echo [!] AVISO: O motor do Docker travou ou esta em estado zumbi no Windows.
-    echo [i] Executando restauracao automatica limpa (encerra processos presos e reinicia)...
-    taskkill /F /IM "Docker Desktop.exe" /IM "com.docker.backend.exe" /IM "com.docker.proxy.exe" /IM "com.docker.build.exe" /IM "docker-agent.exe" /IM "wsl.exe" /IM "wslhost.exe" >nul 2>&1
-    wsl --shutdown >nul 2>&1
-    rd /s /q "%TEMP%\DockerDesktopInstallers" >nul 2>&1
-    rd /s /q "%TEMP%\DockerDesktopUpdates" >nul 2>&1
-    timeout /t 3 /nobreak >nul
-    echo [i] Subindo Docker Desktop limpo...
-    start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
-    set /a TRIES=0
-    goto WAIT_CLEAN_RESTART
-)
-
-echo Aguardando motor do Docker (%TRIES%/15)...
-timeout /t 3 /nobreak >nul
-goto RETRY_ENGINE
-
-:WAIT_CLEAN_RESTART
-set /a TRIES=%TRIES%+1
-docker version >nul 2>&1
-if "%ERRORLEVEL%"=="0" (
-    echo [OK] Motor do Docker restaurado com sucesso!
-    goto DOCKER_READY
-)
-if %TRIES% GEQ 20 (
+    echo  - Link do Tnel HTTPS : %TUNNEL_URL%
+    echo  - Servidor WebRTC Local: http://127.0.0.1:1984
+    echo  - Cmeras Vinculadas   : Garagem (139), IP (198), Tripla Multi-Lente (240)
     echo.
-    echo [X] Erro critico: O Docker Desktop nao respondeu apos reinicializacao.
-    echo     Verifique as configuracoes do Docker Desktop ou reinicie o PC.
-    pause
-    exit /b 1
+    powershell -NoProfile -Command "Set-Clipboard -Value '%TUNNEL_URL%'"
+    echo [OK] URL copiada para a Área de Transferência do Windows!
+    echo.
+    echo Abrindo HomePulse AI com sincronização automática em 1 clique...
+    start "" "https://casainteligenteai.lovable.app/dvr-nvr?gateway=%TUNNEL_URL%"
+) else (
+    echo [AVISO] O túnel demorou a responder, mas o go2rtc está ativo localmente em:
+    echo http://127.0.0.1:1984
+    echo Abrindo aplicação no modo local...
+    start "" "https://casainteligenteai.lovable.app/dvr-nvr?gateway=http://127.0.0.1:1984"
 )
-echo Aguardando inicializacao limpa do Docker (%TRIES%/20)...
-timeout /t 3 /nobreak >nul
-goto WAIT_CLEAN_RESTART
-
-:DOCKER_READY
+echo ==============================================================================
 echo.
-echo [2/3] Subindo servicos das cameras e gravador no Disco D...
-cd /d "%~dp0iot-gateway\deploy"
-docker compose up -d
-
+echo Dica: Mantenha esta janela minimizada enquanto estiver usando as câmeras.
+echo Para encerrar, basta fechar esta janela ou executar o script novamente.
 echo.
-echo [3/3] Servicos CFTV em execucao:
-docker ps --filter "name=ci-" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-
-echo.
-echo ==========================================================
-echo [Auto-Sync] Sincronizando URL do Tunel Cloudflare...
-powershell -NoProfile -Command "$q = docker ps -q --filter 'name=ci-quick-tunnel'; if (-not $q) { docker rm -f ci-quick-tunnel 2>$null; docker run -d --name ci-quick-tunnel --network deploy_ci-iot-net cloudflare/cloudflared:latest tunnel --url http://recorder:1985 >$null; Start-Sleep -Seconds 3 }; $m = (docker logs ci-quick-tunnel 2>&1 | Select-String -Pattern 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' | Select-Object -Last 1).Line; if ($m -match 'https://[a-zA-Z0-9-]+\.trycloudflare\.com') { $u = $matches[0].Trim(); Write-Host 'URL do Tunnel Ativo: ' -ForegroundColor Cyan -NoNewline; Write-Host $u -ForegroundColor Yellow; Set-Clipboard -Value $u; Write-Host '[OK] Link copiado para a Area de Transferencia!' -ForegroundColor Green; Write-Host '     No navegador, basta clicar em Gateway CFTV > Colar do Robo!' -ForegroundColor DarkGray } else { Write-Host 'Gateway local: http://127.0.0.1:1985' -ForegroundColor Cyan }"
-echo ==========================================================
-echo.
-echo Tudo pronto! O streaming e as gravacoes estao ativos.
-echo.
-set /p OPEN_APP="Deseja abrir o HomePulse AI no navegador agora? [S/N]: "
-if /I "%OPEN_APP%"=="S" (
-    start https://casainteligenteai.lovable.app/dvr-nvr
-)
-
 pause

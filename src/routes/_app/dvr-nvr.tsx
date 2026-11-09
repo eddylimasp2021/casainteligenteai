@@ -77,6 +77,8 @@ import { StorageSettingsDialog } from "@/components/dvr-nvr/storage-settings-dia
 import { MultiLensConfigDialog } from "@/components/dvr-nvr/multi-lens-config-dialog";
 import { FacialRecognitionDialog } from "@/components/dvr-nvr/facial-recognition-dialog";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useHousehold } from "@/lib/household";
 
 export const Route = createFileRoute("/_app/dvr-nvr")({
   head: () => ({
@@ -141,6 +143,7 @@ function getCanonicalCameraKey(cam: { id?: string; name?: string; ip?: string; s
 }
 
 function DvrNvrPage() {
+  const { current } = useHousehold();
   // Storage Configuration state (Where to save recordings and snapshots - strictly Drive D:)
   const [storageConfig, setStorageConfig] = useState<StorageConfig>(() => {
     try {
@@ -300,7 +303,7 @@ function DvrNvrPage() {
 
   // View Engine: "real" (WebRTC via Docker Media Gateway go2rtc) vs "simulation" (AI Canvas)
   const [viewEngine, setViewEngine] = useState<"real" | "simulation">("real");
-  const CURRENT_CLOUDFLARE_TUNNEL = "https://cake-studied-rendered-contemporary.trycloudflare.com";
+
   
   // Connection Mode: "robot" (Auto-Sync) | "lan" (Rede Local Direta) | "permanent" (Túnel Fixo Zero Trust)
   const [connectionMode, setConnectionMode] = useState<"robot" | "lan" | "permanent">(() => {
@@ -330,15 +333,15 @@ function DvrNvrPage() {
     try {
       const saved = localStorage.getItem("homepulse_dvr_gateway_url_v1");
       if (saved && saved.trim()) {
-        if (saved.includes("trycloudflare.com") && saved.trim() !== CURRENT_CLOUDFLARE_TUNNEL) {
-          localStorage.setItem("homepulse_dvr_gateway_url_v1", CURRENT_CLOUDFLARE_TUNNEL);
-          return CURRENT_CLOUDFLARE_TUNNEL;
+        if (saved.includes("cake-studied-rendered-contemporary")) {
+          localStorage.removeItem("homepulse_dvr_gateway_url_v1");
+          return "";
         }
         return saved.trim();
       }
     } catch {}
     const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
-    return isHttps ? CURRENT_CLOUDFLARE_TUNNEL : "http://127.0.0.1:1985";
+    return isHttps ? "" : "http://127.0.0.1:1984";
   });
   const [isGatewayModalOpen, setIsGatewayModalOpen] = useState(false);
   const [tempGatewayUrl, setTempGatewayUrl] = useState(gatewayUrl);
@@ -387,7 +390,7 @@ function DvrNvrPage() {
         handleTestPing(clean);
       } else {
         toast.info("Nenhuma URL de túnel válida foi encontrada na sua Área de Transferência.", {
-          description: "Execute o INICIAR_CFTV_HOMEPULSE.bat para copiar o link atual.",
+          description: "Execute o INICIAR_CFTV_1_CLIQUE.bat para copiar o link atual.",
         });
       }
     } catch {
@@ -395,48 +398,214 @@ function DvrNvrPage() {
     }
   };
 
-  // Auto-healing: Test active gateway URL and recover to CURRENT_CLOUDFLARE_TUNNEL if unreachable
-  useEffect(() => {
-    const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
-    if (isHttps && gatewayUrl.includes("trycloudflare.com") && gatewayUrl !== CURRENT_CLOUDFLARE_TUNNEL) {
-      setGatewayUrl(CURRENT_CLOUDFLARE_TUNNEL);
-      setTempGatewayUrl(CURRENT_CLOUDFLARE_TUNNEL);
-      try {
-        localStorage.setItem("homepulse_dvr_gateway_url_v1", CURRENT_CLOUDFLARE_TUNNEL);
-      } catch {}
-      return;
+  // Sincronização em nuvem do Gateway CFTV para todas as máquinas e dispositivos
+  const syncGatewayToCloud = async (urlToSave: string, hId?: string) => {
+    const householdId = hId || current?.id;
+    if (!householdId || !urlToSave) return;
+    const clean = urlToSave.trim().replace(/\/+$/, "");
+    try {
+      const { data: existing } = await supabase
+        .from("devices")
+        .select("id")
+        .eq("household_id", householdId)
+        .eq("device_type", "cftv_gateway")
+        .maybeSingle();
+
+      if (existing) {
+        await supabase
+          .from("devices")
+          .update({
+            ip_address: clean,
+            state: { gateway_url: clean, updated_at: new Date().toISOString() },
+            status: "online",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existing.id);
+      } else {
+        await supabase.from("devices").insert({
+          name: "Gateway CFTV (go2rtc)",
+          category: "gateway",
+          device_type: "cftv_gateway",
+          household_id: householdId,
+          ip_address: clean,
+          state: { gateway_url: clean, updated_at: new Date().toISOString() },
+          status: "online",
+          capabilities: ["video", "webrtc", "ptz"],
+        });
+      }
+      console.log("[DVR] Gateway sincronizado na nuvem para todos os dispositivos:", clean);
+    } catch (err) {
+      console.warn("[DVR] Falha ao persistir gateway na nuvem:", err);
     }
+  };
+
+  // 1-Clique Auto-Descoberta e Reconexão Instantânea em qualquer máquina
+  const handleAutoDiscoverGateway = async (silent = false) => {
+    setIsAutoDiscovering(true);
+    const candidates: string[] = [];
+
+    // Candidato 1: Parâmetro da URL (?gateway=)
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const gw = params.get("gateway");
+      if (gw) candidates.push(decodeURIComponent(gw).trim().replace(/\/+$/, ""));
+    }
+
+    // Candidato 2: Área de Transferência (link copiado pelo script INICIAR_CFTV_1_CLIQUE.bat)
+    try {
+      if (navigator.clipboard) {
+        const clip = await navigator.clipboard.readText();
+        if (clip && (clip.includes("trycloudflare.com") || clip.includes(":1984"))) {
+          const cleanClip = clip.trim().replace(/\/+$/, "");
+          if (!candidates.includes(cleanClip)) candidates.push(cleanClip);
+        }
+      }
+    } catch {}
+
+    // Candidato 3: Supabase Cloud para esta residência
+    if (current?.id) {
+      try {
+        const { data } = await supabase
+          .from("devices")
+          .select("ip_address, state")
+          .eq("household_id", current.id)
+          .eq("device_type", "cftv_gateway")
+          .maybeSingle();
+        const cloudUrl = (data?.state as any)?.gateway_url || data?.ip_address;
+        if (cloudUrl && typeof cloudUrl === "string") {
+          const cleanCloud = cloudUrl.trim().replace(/\/+$/, "");
+          if (!candidates.includes(cleanCloud)) candidates.push(cleanCloud);
+        }
+      } catch {}
+    }
+
+    // Candidato 4: Salvo no localStorage
+    if (gatewayUrl && !candidates.includes(gatewayUrl) && !gatewayUrl.includes("cake-studied-rendered-contemporary")) {
+      candidates.push(gatewayUrl);
+    }
+
+    // Candidatos 5 e 6: IPs locais
+    candidates.push("http://192.168.0.117:1984");
+    candidates.push("http://127.0.0.1:1984");
+
+    // Ping nos candidatos para encontrar o primeiro respondendo
+    let workingUrl: string | null = null;
+    for (const cand of candidates) {
+      if (!cand || cand.includes("cake-studied-rendered-contemporary")) continue;
+      try {
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 2500);
+        const res = await fetch(`${cand}/api/streams`, { signal: ctrl.signal });
+        clearTimeout(tid);
+        if (res.ok) {
+          workingUrl = cand;
+          break;
+        }
+      } catch {}
+    }
+
+    setIsAutoDiscovering(false);
+
+    if (workingUrl) {
+      setGatewayUrl(workingUrl);
+      setTempGatewayUrl(workingUrl);
+      setIsGatewayUnreachable(false);
+      try {
+        localStorage.setItem("homepulse_dvr_gateway_url_v1", workingUrl);
+      } catch {}
+      if (current?.id) {
+        syncGatewayToCloud(workingUrl, current.id);
+      }
+      if (!silent) {
+        toast.success("Gateway CFTV detectado e reconectado com sucesso!", {
+          description: workingUrl,
+        });
+      }
+      return true;
+    } else {
+      if (!silent) {
+        toast.error("Não foi possível conectar automaticamente ao Gateway CFTV.", {
+          description: "Execute o INICIAR_CFTV_1_CLIQUE.bat no computador conectado às câmeras.",
+        });
+      }
+      return false;
+    }
+  };
+
+  // Carrega parâmetro da URL ?gateway= ou busca da nuvem ao iniciar
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const gwParam = params.get("gateway");
+      if (gwParam) {
+        const clean = decodeURIComponent(gwParam).trim().replace(/\/+$/, "");
+        setGatewayUrl(clean);
+        setTempGatewayUrl(clean);
+        setIsGatewayUnreachable(false);
+        try {
+          localStorage.setItem("homepulse_dvr_gateway_url_v1", clean);
+        } catch {}
+        toast.success("Gateway CFTV sincronizado via 1-Clique!", { description: clean });
+
+        params.delete("gateway");
+        const remaining = params.toString();
+        const newUrl = window.location.pathname + (remaining ? `?${remaining}` : "");
+        window.history.replaceState({}, "", newUrl);
+
+        if (current?.id) {
+          syncGatewayToCloud(clean, current.id);
+        }
+        return;
+      }
+    }
+
+    if (current?.id) {
+      supabase
+        .from("devices")
+        .select("ip_address, state")
+        .eq("household_id", current.id)
+        .eq("device_type", "cftv_gateway")
+        .maybeSingle()
+        .then(({ data }) => {
+          const cloudUrl = (data?.state as any)?.gateway_url || data?.ip_address;
+          if (cloudUrl && typeof cloudUrl === "string" && cloudUrl.startsWith("http")) {
+            const clean = cloudUrl.trim().replace(/\/+$/, "");
+            if (!clean.includes("cake-studied-rendered-contemporary")) {
+              setGatewayUrl(clean);
+              setTempGatewayUrl(clean);
+              setIsGatewayUnreachable(false);
+              try {
+                localStorage.setItem("homepulse_dvr_gateway_url_v1", clean);
+              } catch {}
+            }
+          }
+        })
+        .catch((e) => console.warn("[DVR] Falha ao carregar gateway da nuvem", e));
+    }
+  }, [current?.id]);
+
+  // Monitora a saúde da conexão com o gateway
+  useEffect(() => {
+    if (!gatewayUrl) return;
 
     const testController = new AbortController();
     const timeoutId = setTimeout(() => testController.abort(), 4000);
     fetch(`${gatewayUrl}/api/streams`, { signal: testController.signal })
       .then((res) => {
         clearTimeout(timeoutId);
-        if (!res.ok && gatewayUrl !== CURRENT_CLOUDFLARE_TUNNEL && isHttps) {
-          console.warn("[DVR] Gateway inacessível, recuperando para o túnel ativo:", CURRENT_CLOUDFLARE_TUNNEL);
-          setGatewayUrl(CURRENT_CLOUDFLARE_TUNNEL);
-          setTempGatewayUrl(CURRENT_CLOUDFLARE_TUNNEL);
-          try {
-            localStorage.setItem("homepulse_dvr_gateway_url_v1", CURRENT_CLOUDFLARE_TUNNEL);
-          } catch {}
-        }
+        setIsGatewayUnreachable(!res.ok);
       })
       .catch(() => {
         clearTimeout(timeoutId);
-        if (gatewayUrl !== CURRENT_CLOUDFLARE_TUNNEL && isHttps) {
-          console.warn("[DVR] Falha de conexão com gateway salvo. Restaurando túnel oficial:", CURRENT_CLOUDFLARE_TUNNEL);
-          setGatewayUrl(CURRENT_CLOUDFLARE_TUNNEL);
-          setTempGatewayUrl(CURRENT_CLOUDFLARE_TUNNEL);
-          try {
-            localStorage.setItem("homepulse_dvr_gateway_url_v1", CURRENT_CLOUDFLARE_TUNNEL);
-          } catch {}
-        }
+        setIsGatewayUnreachable(true);
       });
   }, [gatewayUrl]);
 
   useEffect(() => {
     try {
-      localStorage.setItem("homepulse_dvr_gateway_url_v1", gatewayUrl);
+      if (gatewayUrl) {
+        localStorage.setItem("homepulse_dvr_gateway_url_v1", gatewayUrl);
+      }
     } catch {}
   }, [gatewayUrl]);
 
@@ -1023,6 +1192,21 @@ function DvrNvrPage() {
                 </Button>
               </div>
 
+              {/* 1-Click Auto-Reconfig / Discover Gateway Button */}
+              <Button
+                variant={isGatewayUnreachable ? "destructive" : "outline"}
+                size="sm"
+                onClick={() => handleAutoDiscoverGateway(false)}
+                disabled={isAutoDiscovering}
+                className="h-7 px-2.5 text-xs font-semibold gap-1.5 shadow-sm"
+                title="1-Clique: Auto-descobrir e sincronizar o Gateway CFTV em qualquer máquina"
+              >
+                <Zap className={`size-3.5 ${isAutoDiscovering ? "animate-spin text-amber-300" : "text-amber-400"}`} />
+                <span className="hidden md:inline">
+                  {isAutoDiscovering ? "Descobrindo..." : "1-Clique Reconectar"}
+                </span>
+              </Button>
+
               {/* Gateway CFTV Connection Button */}
               <Button
                 variant="outline"
@@ -1134,6 +1318,42 @@ function DvrNvrPage() {
 
         {/* TAB 1: Live Mosaic View */}
         <TabsContent value="live" className="m-0 space-y-4">
+          {/* Gateway Disconnected Warning Banner with 1-Click Reconnect */}
+          {(isGatewayUnreachable || !gatewayUrl) && (
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-200 shadow-sm">
+              <div className="flex items-center gap-2.5">
+                <ShieldAlert className="size-5 text-amber-400 shrink-0" />
+                <div className="text-xs">
+                  <span className="font-bold text-amber-300">Gateway CFTV não sincronizado ou aguardando conexão.</span>
+                  <span className="hidden sm:inline text-neutral-300 ml-1">
+                    Se você trocou de máquina, dê 2 cliques em <code>INICIAR_CFTV_1_CLIQUE.bat</code> no PC das câmeras e use o botão ao lado.
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => handleAutoDiscoverGateway(false)}
+                  disabled={isAutoDiscovering}
+                  className="h-7 text-xs bg-amber-500 hover:bg-amber-600 text-black font-bold gap-1.5 shadow"
+                >
+                  <Zap className={`size-3.5 ${isAutoDiscovering ? "animate-spin" : ""}`} />
+                  {isAutoDiscovering ? "Detectando..." : "⚡ 1-Clique Auto-Reconectar"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setTempGatewayUrl(gatewayUrl);
+                    setIsGatewayModalOpen(true);
+                  }}
+                  className="h-7 text-xs border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
+                >
+                  Configurar
+                </Button>
+              </div>
+            </div>
+          )}
           {gridChannels.length === 0 ? (
             <div className="text-center py-16 border rounded-xl border-dashed">
               <Cctv className="size-12 mx-auto text-muted-foreground/50 mb-3" />
@@ -1744,7 +1964,7 @@ function DvrNvrPage() {
                   localStorage.setItem("homepulse_dvr_connection_mode_v1", val);
                 } catch {}
                 if (val === "robot") {
-                  setTempGatewayUrl(CURRENT_CLOUDFLARE_TUNNEL);
+                  handleAutoDiscoverGateway(false);
                 } else if (val === "lan") {
                   setTempGatewayUrl("http://127.0.0.1:1984");
                 } else if (val === "permanent" && permanentUrl) {
@@ -1809,12 +2029,12 @@ function DvrNvrPage() {
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      setTempGatewayUrl(CURRENT_CLOUDFLARE_TUNNEL);
-                      handleTestPing(CURRENT_CLOUDFLARE_TUNNEL);
+                      handleAutoDiscoverGateway(false);
+                      handleAutoDiscoverGateway(false);
                     }}
                     className="h-7 text-[11px] gap-1.5 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10"
                   >
-                    <RefreshCw className="size-3" /> Restaurar Túnel Atual
+                    <Zap className="size-3 text-amber-400" /> Auto-Descobrir Ativo
                   </Button>
                   <Button
                     type="button"

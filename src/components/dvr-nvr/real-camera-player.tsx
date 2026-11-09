@@ -952,7 +952,7 @@ export function RealCameraPlayer({
 
   const copyDockerCommand = () => {
     const cmd =
-      'docker compose -f "d:\\Sistema ja  ok\\casainteligenteai\\iot-gateway\\deploy\\docker-compose.yml" up -d go2rtc';
+      'INICIAR_CFTV_1_CLIQUE.bat';
     navigator.clipboard.writeText(cmd);
     setCopiedCommand(true);
     toast.success("Comando copiado para a área de transferência!");

@@ -51,10 +51,10 @@ export const SMART_TV_PRESETS: SmartTvPreset[] = [
 
 const STORAGE_LG_KEY = "homepulse_lg_client_key";
 const DEFAULT_SAVED_KEY = "c8708eb7cd1845c6aacec78f6cdc370d";
-export const DEFAULT_TV_TUNNEL_GATEWAY = "https://cake-studied-rendered-contemporary.trycloudflare.com";
+export const DEFAULT_TV_TUNNEL_GATEWAY = "";
 
 export function getSmartTvGatewayUrl(): string {
-  if (typeof window === "undefined") return "http://127.0.0.1:1985";
+  if (typeof window === "undefined") return "http://127.0.0.1:1984";
   try {
     const saved = localStorage.getItem("homepulse_dvr_gateway_url_v1");
     if (saved && saved.trim() && !saved.includes("usb-recommendations") && !saved.includes("dreams-metal")) {
@@ -62,7 +62,7 @@ export function getSmartTvGatewayUrl(): string {
     }
   } catch {}
   const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
-  return isHttps ? DEFAULT_TV_TUNNEL_GATEWAY : "http://127.0.0.1:1985";
+  return isHttps ? "" : "http://127.0.0.1:1984";
 }
 
 export function getSavedLgClientKey(ip?: string): string {

@@ -36,3 +36,7 @@ dist-ssr
 pacotes/
 *.zip
 scratch/
+
+# CFTV binaries and logs
+iot-gateway/deploy/bin/
+*.log
