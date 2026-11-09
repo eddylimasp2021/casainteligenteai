@@ -625,3 +625,90 @@ mqtt:
 
   return { configurationYaml: config, automationsYaml };
 }
+
+
+/**
+ * Busca a lista completa de estados e entidades de uma instância real do Home Assistant
+ */
+export async function fetchHassStatesFromInstance(
+  url: string,
+  token: string
+): Promise<{ ok: boolean; entities: HassEntity[]; message?: string }> {
+  const cleanUrl = url.replace(/\/+$/, "");
+  const cleanToken = token.trim();
+
+  if (!cleanUrl) {
+    return { ok: false, entities: [], message: "URL do Home Assistant não informada." };
+  }
+
+  try {
+    const res = await fetch(`${cleanUrl}/api/states`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${cleanToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!res.ok) {
+      return { ok: false, entities: [], message: `HTTP ${res.status}: ${res.statusText}` };
+    }
+
+    const data: any[] = await res.json();
+    const mapped: HassEntity[] = data.map((item) => ({
+      entity_id: item.entity_id,
+      state: item.state,
+      attributes: {
+        friendly_name: item.attributes?.friendly_name || item.entity_id,
+        icon: item.attributes?.icon,
+        unit_of_measurement: item.attributes?.unit_of_measurement,
+        device_class: item.attributes?.device_class,
+        brightness: item.attributes?.brightness,
+        color_temp: item.attributes?.color_temp,
+        rgb_color: item.attributes?.rgb_color,
+        current_temperature: item.attributes?.current_temperature,
+        temperature: item.attributes?.temperature,
+        hvac_mode: item.attributes?.hvac_mode,
+        hvac_modes: item.attributes?.hvac_modes,
+        battery_level: item.attributes?.battery_level,
+        last_changed: item.last_changed || new Date().toISOString(),
+        last_updated: item.last_updated || new Date().toISOString(),
+        ...item.attributes,
+      },
+    }));
+
+    return { ok: true, entities: mapped };
+  } catch (err: any) {
+    return { ok: false, entities: [], message: err?.message || "Falha ao consultar entidades do Home Assistant." };
+  }
+}
+
+/**
+ * Envia comando de serviço para a instância do Home Assistant (ex: light/turn_on)
+ */
+export async function callHassService(
+  url: string,
+  token: string,
+  domain: string,
+  service: string,
+  serviceData: Record<string, unknown> = {}
+): Promise<{ ok: boolean; message?: string }> {
+  const cleanUrl = url.replace(/\/+$/, "");
+  try {
+    const res = await fetch(`${cleanUrl}/api/services/${domain}/${service}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token.trim()}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(serviceData),
+    });
+
+    if (!res.ok) {
+      return { ok: false, message: `HTTP ${res.status}: ${res.statusText}` };
+    }
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, message: err?.message || "Falha ao enviar comando." };
+  }
+}

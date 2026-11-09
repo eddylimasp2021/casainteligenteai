@@ -36,6 +36,8 @@ import {
   evaluateHassTemplate,
   testHassConnection,
   generateConfigurationYaml,
+  fetchHassStatesFromInstance,
+  callHassService,
 } from "@/lib/home-assistant";
 
 export const Route = createFileRoute("/_app/home-assistant")({
@@ -110,6 +112,34 @@ function HomeAssistantPage() {
 
   // Conexão externa HA
   const [isTestingHA, setIsTestingHA] = useState(false);
+  const [isSyncingEntities, setIsSyncingEntities] = useState(false);
+
+  // Sincronizar entidades com a instância real do Home Assistant
+  const handleSyncFromHA = async () => {
+    if (!haConfig.haUrl || !haConfig.accessToken) {
+      toast.error("Configure a URL e o Token do Home Assistant antes de sincronizar.");
+      setActiveTab("config");
+      return;
+    }
+
+    setIsSyncingEntities(true);
+    try {
+      const res = await fetchHassStatesFromInstance(haConfig.haUrl, haConfig.accessToken);
+      if (res.ok && res.entities.length > 0) {
+        setEntities(res.entities);
+        const updatedConfig = { ...haConfig, isConnected: true, lastSyncAt: new Date().toISOString() };
+        setHaConfig(updatedConfig);
+        saveHassConfig(updatedConfig);
+        toast.success(`Sincronizadas ${res.entities.length} entidades do Home Assistant!`);
+      } else {
+        toast.error(res.message || "Não foi possível carregar as entidades do Home Assistant.");
+      }
+    } catch (err: any) {
+      toast.error(`Erro ao sincronizar: ${err?.message || "Falha na conexão"}`);
+    } finally {
+      setIsSyncingEntities(false);
+    }
+  };
 
   // Atualizar renderização do template Jinja2
   useEffect(() => {
@@ -342,6 +372,17 @@ function HomeAssistantPage() {
           <Badge variant="outline" className="text-xs font-mono bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
             CFTV Gravando Disco D:
           </Badge>
+          <Button
+            size="sm"
+            variant="default"
+            onClick={handleSyncFromHA}
+            disabled={isSyncingEntities}
+            className="gap-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-xs"
+            title="Importar e sincronizar todas as entidades reais da sua instância do Home Assistant"
+          >
+            <RefreshCw className={`size-3.5 ${isSyncingEntities ? "animate-spin" : ""}`} />
+            <span>{isSyncingEntities ? "Sincronizando..." : "Sincronizar HA"}</span>
+          </Button>
           <Button size="sm" variant="outline" onClick={handleExportYaml} className="gap-1.5 text-xs">
             <Download className="size-3.5" /> Exportar YAML
           </Button>
