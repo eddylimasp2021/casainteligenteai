@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "./auth";
+import { useAuth, isUserSuperAdmin } from "./auth";
 import type { Tables, Enums } from "@/integrations/supabase/types";
 
 export type Household = Tables<"households"> & { role: Enums<"household_role"> };
@@ -14,6 +14,7 @@ type Ctx = {
   loading: boolean;
   canAdmin: boolean;
   canControl: boolean;
+  isOwner: boolean;
   refetch: () => void;
 };
 const HouseholdCtx = createContext<Ctx | null>(null);
@@ -24,7 +25,7 @@ const DEFAULT_HOUSEHOLD: Household = {
   created_at: new Date().toISOString(),
   created_by: "fbc33689-6d04-4655-a9d3-97bae3add559",
   deleted_at: null,
-  role: "admin",
+  role: "owner",
 };
 
 export function useHouseholdsQuery() {
@@ -64,12 +65,16 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
     [households, currentId],
   );
 
+  const { user } = useAuth();
+  const isSuper = isUserSuperAdmin(user?.email);
+
   const value: Ctx = {
     households,
     current,
     loading: q.isLoading,
-    canAdmin: current?.role === "owner" || current?.role === "admin",
-    canControl: !!current && current.role !== "guest",
+    canAdmin: isSuper || current?.role === "owner" || current?.role === "admin",
+    canControl: isSuper || (!!current && current.role !== "guest"),
+    isOwner: isSuper || current?.role === "owner",
     setCurrentId: (id) => {
       localStorage.setItem(KEY, id);
       setCurrentIdState(id);

@@ -5,10 +5,19 @@ import { supabase } from "@/integrations/supabase/client";
 type AuthState = { session: Session | null; user: User | null; loading: boolean };
 const Ctx = createContext<AuthState>({ session: null, user: null, loading: true });
 
+const SUPERADMIN_EMAILS = [
+  "eddylimainformatica@gmail.com",
+];
+
+export const isUserSuperAdmin = (email?: string | null): boolean => {
+  if (!email) return false;
+  return SUPERADMIN_EMAILS.includes(email.trim().toLowerCase());
+};
+
 const DEFAULT_ADMIN_USER: User = {
   id: "fbc33689-6d04-4655-a9d3-97bae3add559",
-  app_metadata: { provider: "email" },
-  user_metadata: { full_name: "Eddy Lima (Administrador)" },
+  app_metadata: { provider: "email", role: "superadmin" },
+  user_metadata: { full_name: "Eddy Lima (Dono & Superadmin)", is_owner: true, role: "owner" },
   aud: "authenticated",
   created_at: new Date().toISOString(),
   email: "eddylimainformatica@gmail.com",
