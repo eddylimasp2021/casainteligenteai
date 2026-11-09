@@ -53,16 +53,22 @@ const STORAGE_LG_KEY = "homepulse_lg_client_key";
 const DEFAULT_SAVED_KEY = "c8708eb7cd1845c6aacec78f6cdc370d";
 export const DEFAULT_TV_TUNNEL_GATEWAY = "";
 
+import { callHassService, getStoredHassConfig } from "./home-assistant";
+
 export function getSmartTvGatewayUrl(): string {
-  if (typeof window === "undefined") return "http://127.0.0.1:1984";
+  if (typeof window === "undefined") return "http://127.0.0.1:1985";
   try {
+    const savedBridge = localStorage.getItem("homepulse_smart_bridge_url_v1");
+    if (savedBridge && savedBridge.trim()) {
+      return savedBridge.trim().replace(/\/+$/, "");
+    }
     const saved = localStorage.getItem("homepulse_dvr_gateway_url_v1");
     if (saved && saved.trim() && !saved.includes("usb-recommendations") && !saved.includes("dreams-metal")) {
       return saved.trim().replace(/\/+$/, "");
     }
   } catch {}
   const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
-  return isHttps ? "" : "http://127.0.0.1:1984";
+  return isHttps ? "" : "http://127.0.0.1:1985";
 }
 
 export function getSavedLgClientKey(ip?: string): string {
@@ -286,10 +292,17 @@ export async function sendLgWebOsCommand(
   const gw = getSmartTvGatewayUrl();
   const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
 
-  // 1. Envia via Gateway Bridge (necessário em HTTPS / Lovable para contornar Mixed Content e PNA)
-  if (isHttps || gw) {
+  // 1. TENTATIVA PRIMÁRIA: Envia via Gateway Bridge (Smart TV Bridge local porta 1985 ou túnel)
+  const candidateGateways = [
+    gw,
+    "http://127.0.0.1:1985",
+    "http://192.168.0.117:1985",
+    "http://127.0.0.1:1984"
+  ].filter(Boolean);
+
+  for (const targetGw of Array.from(new Set(candidateGateways))) {
     try {
-      const res = await fetch(`${gw}/api/tv/command`, {
+      const res = await fetch(`${targetGw}/api/tv/command`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -297,35 +310,61 @@ export async function sendLgWebOsCommand(
           uri,
           payload,
           client_key: key,
+          mac: "c4:36:6c:40:84:ac"
         }),
-        signal: AbortSignal.timeout(4500),
+        signal: AbortSignal.timeout(3000),
       });
       if (res.ok) {
         const data = await res.json();
         if (data.ok) {
-          return { ok: true, message: "Comando executado com sucesso." };
-        }
-        if (data.reg?.type === "response" && data.reg?.payload?.pairingType === "PROMPT") {
-          return {
-            ok: false,
-            needPairing: true,
-            message: "Permissão necessária na TV. Aceite a mensagem no controle da TV.",
-          };
-        }
-        if (data.error && String(data.error).includes("401")) {
-          return {
-            ok: false,
-            needPairing: true,
-            message: "Permissão necessária na TV. Ative 'LG Connect Apps' na TV.",
-          };
+          return { ok: true, message: "✓ Comando executado via Gateway Local." };
         }
       }
-    } catch (e) {
-      console.warn("[SmartTV] Gateway proxy failed, attempting direct ws...", e);
-    }
+    } catch {}
   }
 
-  // 2. Fallback direto via WebSocket local
+  // 2. TENTATIVA SECUNDÁRIA (FAILOVER): Home Assistant Bridge
+  try {
+    const haConfig = getStoredHassConfig();
+    if (haConfig && haConfig.haUrl && haConfig.accessToken) {
+      let service = "turn_off";
+      let domain = "media_player";
+      let serviceData: Record<string, unknown> = {};
+
+      if (uri.includes("turnOff")) {
+        service = "turn_off";
+      } else if (uri.includes("volumeUp")) {
+        service = "volume_up";
+      } else if (uri.includes("volumeDown")) {
+        service = "volume_down";
+      } else if (uri.includes("setVolume")) {
+        service = "volume_set";
+        serviceData = { volume_level: (payload.volume || 20) / 100 };
+      } else if (uri.includes("setMute")) {
+        service = "volume_mute";
+        serviceData = { is_volume_muted: !!payload.mute };
+      } else if (uri.includes("media.controls/play")) {
+        service = "media_play";
+      } else if (uri.includes("media.controls/pause")) {
+        service = "media_pause";
+      }
+
+      const haRes = await callHassService(
+        haConfig.haUrl,
+        haConfig.accessToken,
+        domain,
+        service,
+        serviceData
+      );
+      if (haRes.ok) {
+        return { ok: true, message: "✓ Comando executado via Home Assistant (Fallback)." };
+      }
+    }
+  } catch (haErr) {
+    console.warn("[SmartTV] Fallback Home Assistant falhou:", haErr);
+  }
+
+  // 3. TENTATIVA TERCIÁRIA: Conexão direta WebSocket local no navegador
   return new Promise((resolve) => {
     let resolved = false;
     const done = (ok: boolean, needPairing: boolean, message: string) => {
@@ -405,6 +444,7 @@ export async function sendLgWebOsCommand(
 
 /** Comandos pré-configurados para a TV LG */
 export const LG_COMMANDS = {
+  powerOn: (ip: string) => sendLgWebOsCommand(ip, "ssap://system/turnOn"),
   powerOff: (ip: string) => sendLgWebOsCommand(ip, "ssap://system/turnOff"),
   volumeUp: (ip: string) => sendLgWebOsCommand(ip, "ssap://audio/volumeUp"),
   volumeDown: (ip: string) => sendLgWebOsCommand(ip, "ssap://audio/volumeDown"),

@@ -139,7 +139,8 @@ export function DeviceCard({ device, roomName, canControl, compact }: { device: 
           res = await LG_COMMANDS.powerOff(tvIp);
           await send({ on: false }, false, "✓ TV desligada.");
         } else {
-          await send({ on: true }, false, "✓ TV ligada.");
+          res = await LG_COMMANDS.powerOn(tvIp);
+          await send({ on: true }, false, "✓ Pacote Wake-on-LAN enviado para ligar a TV.");
         }
         break;
       case "vol_up":

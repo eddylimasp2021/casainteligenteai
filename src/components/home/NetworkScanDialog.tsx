@@ -36,11 +36,45 @@ export function NetworkScanDialog({
     localStorage.setItem(KEY, url);
     try {
       const qs = subnet.trim() ? `?subnet=${encodeURIComponent(subnet.trim())}` : "";
-      const res = await fetch(`${url.replace(/\/+$/, "")}/network/scan${qs}`);
-      if (!res.ok) throw new Error(String(res.status));
-      const data = (await res.json()) as { subnets: string[]; hosts: ScannedHost[] };
-      setHosts(data.hosts);
-      toast.success(`${data.hosts.length} aparelhos encontrados em ${data.subnets.map((s) => s + ".x").join(", ")}`);
+      
+      // Tenta primeiro o Gateway na porta 1985 (Ponte IoT Plug & Play), depois a URL configurada
+      let res: Response | null = null;
+      const candidates = ["http://127.0.0.1:1985/api/tv/discover", `${url.replace(/\/+$/, "")}/network/scan${qs}`];
+
+      for (const cand of candidates) {
+        try {
+          const r = await fetch(cand, { signal: AbortSignal.timeout(2500) });
+          if (r.ok) {
+            res = r;
+            break;
+          }
+        } catch {}
+      }
+
+      if (!res) throw new Error("Gateway inalcançável");
+
+      const data = await res.json();
+      if (data.devices) {
+        // Formato retornado pelo smart_bridge.py
+        const converted: ScannedHost[] = data.devices.map((d: any) => ({
+          ip: d.ip,
+          mac: d.mac,
+          hostname: d.name,
+          openPorts: d.ports || [3000, 3001],
+          services: ["websocket", "webos"],
+          guess: {
+            category: d.category || "entretenimento",
+            deviceType: d.device_type || "televisao",
+            label: d.name || "Smart TV LG",
+            protocol: "wifi",
+          },
+        }));
+        setHosts(converted);
+        toast.success(`✓ ${converted.length} dispositivo(s) inteligente(s) detectado(s) na rede!`);
+      } else {
+        setHosts(data.hosts);
+        toast.success(`${data.hosts.length} aparelhos encontrados em ${data.subnets.map((s: string) => s + ".x").join(", ")}`);
+      }
     } catch {
       toast.error("Não consegui falar com o Gateway local. Verifique se ele está ligado neste computador.");
     } finally {
