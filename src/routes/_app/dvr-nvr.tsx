@@ -40,6 +40,9 @@ import {
   RotateCcw,
   VideoOff,
   Users,
+  X,
+  Eye,
+  Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -629,6 +632,7 @@ function DvrNvrPage() {
   const [isStorageSettingsOpen, setIsStorageSettingsOpen] = useState(false);
   const [isMultiLensModalOpen, setIsMultiLensModalOpen] = useState(false);
   const [isFacialModalOpen, setIsFacialModalOpen] = useState(false);
+  const [isAddScreenDialogOpen, setIsAddScreenDialogOpen] = useState(false);
   const [authorizedPersons, setAuthorizedPersons] = useState<AuthorizedPerson[]>(() => {
     try {
       const saved = localStorage.getItem("homepulse_dvr_authorized_faces_v1");
@@ -978,20 +982,66 @@ function DvrNvrPage() {
     toast.success(`Posição ${index + 1} do mosaico salva.`);
   };
 
+  // Remove uma tela específica do mosaico (substitui por Quadro Preto / Canal Vazio)
+  const handleRemoveSlot = (index: number, cameraName?: string) => {
+    const current = orderedSlots.map((item, idx) => (item ? item.id : `empty_${idx}`));
+    current[index] = `empty_${index}`;
+    const newOrder = current.map((id, idx) => (id.startsWith("empty_") ? `empty_${idx}` : id));
+    setGridOrder(newOrder);
+    localStorage.setItem(GRID_ORDER_STORAGE_KEY, JSON.stringify(newOrder));
+    toast.info(`Tela ${index + 1} (${cameraName || "Câmera"}) removida do mosaico.`);
+  };
+
+  // Adiciona a primeira câmera não exibida no primeiro slot vazio disponível
+  const handleAddSlotToFirstAvailable = (cameraId: string) => {
+    const current = orderedSlots.map((item, idx) => (item ? item.id : `empty_${idx}`));
+    const emptyIndex = current.findIndex((id) => id.startsWith("empty_"));
+    if (emptyIndex >= 0) {
+      assignSlot(emptyIndex, cameraId);
+    } else {
+      // Se não houver slot vazio, se estiver em 2x2 ou 3x2, expande ou adiciona
+      if (gridMode === "2x2") {
+        setGridMode("3x2");
+        setTimeout(() => assignSlot(4, cameraId), 100);
+      } else if (gridMode === "3x2") {
+        setGridMode("3x3");
+        setTimeout(() => assignSlot(6, cameraId), 100);
+      } else {
+        assignSlot(current.length - 1, cameraId);
+      }
+    }
+  };
+
   const renderSlotPicker = (index: number, currentId: string) =>
     gridMode === "1x1" ? null : (
-      <select
-        aria-label={`Câmera da posição ${index + 1}`}
-        value={currentId}
-        onClick={(e) => e.stopPropagation()}
-        onChange={(e) => assignSlot(index, e.target.value)}
-        className="absolute top-2 right-2 z-30 max-w-[55%] h-7 rounded-md bg-background/85 backdrop-blur-md border border-border text-xs text-foreground px-1.5"
-      >
-        <option value="">— Vazio —</option>
-        {gridChannels.map((c) => (
-          <option key={c.id} value={c.id}>{c.name}</option>
-        ))}
-      </select>
+      <div className="absolute top-2 right-2 z-30 flex items-center gap-1 max-w-[70%]">
+        <select
+          aria-label={`Câmera da posição ${index + 1}`}
+          value={currentId}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => assignSlot(index, e.target.value)}
+          className="h-7 rounded-md bg-background/90 backdrop-blur-md border border-border text-xs text-foreground px-1.5 truncate shadow-sm cursor-pointer hover:border-primary/50 transition-colors"
+        >
+          <option value="">— Vazio (Quadro Preto) —</option>
+          {gridChannels.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+        {currentId && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              const cam = gridChannels.find((c) => c.id === currentId);
+              handleRemoveSlot(index, cam?.name);
+            }}
+            title="Remover esta tela do mosaico"
+            className="flex items-center justify-center size-7 rounded-md bg-black/80 hover:bg-rose-600 text-neutral-300 hover:text-white border border-white/20 shadow-md transition-colors shrink-0"
+          >
+            <X className="size-3.5" />
+          </button>
+        )}
+      </div>
     );
 
   const handleDragEnd = () => {
@@ -1283,6 +1333,18 @@ function DvrNvrPage() {
                 </Button>
               </div>
 
+              {/* Botão Adicionar Tela ao Mosaico */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsAddScreenDialogOpen(true)}
+                className="h-7 px-2.5 text-xs font-semibold gap-1.5 border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-300"
+                title="Adicionar ou restaurar uma tela de câmera no mosaico"
+              >
+                <Plus className="size-3.5" />
+                <span>Adicionar Tela</span>
+              </Button>
+
               {/* Reset Custom Grid Order Button */}
               {gridOrder.length > 0 && (
                 <Button
@@ -1549,7 +1611,7 @@ function DvrNvrPage() {
                           setFocusedCameraId(camera.id);
                           setGridMode("1x1");
                         }}
-                        className="absolute top-2 right-2 z-20 h-7 w-7 p-0 bg-black/60 hover:bg-black/80 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute bottom-10 right-2 z-20 h-7 w-7 p-0 bg-black/60 hover:bg-black/80 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
                         title="Focar nesta câmera (1x1)"
                       >
                         <Maximize2 className="size-3.5" />
@@ -2202,6 +2264,131 @@ function DvrNvrPage() {
               }}
             >
               Salvar e Conectar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Adicionar / Gerenciar Telas do Mosaico */}
+      <Dialog open={isAddScreenDialogOpen} onOpenChange={setIsAddScreenDialogOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <Plus className="size-5 text-emerald-400" />
+              Adicionar Tela ao Mosaico CFTV
+            </DialogTitle>
+            <DialogDescription>
+              Escolha qual câmera ou lente você deseja exibir ou restaurar em um quadro do mosaico ao vivo.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Canais e Lentes Disponíveis ({gridChannels.length})
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  handleResetGridOrder();
+                  setIsAddScreenDialogOpen(false);
+                }}
+                className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
+              >
+                <RotateCcw className="size-3" />
+                Restaurar Ordem Padrão
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[340px] overflow-y-auto pr-1">
+              {gridChannels.map((c) => {
+                const isDisplayed = orderedSlots.some((slot) => slot?.id === c.id);
+                return (
+                  <div
+                    key={c.id}
+                    className={`p-3 rounded-xl border flex flex-col justify-between gap-2 transition-all ${
+                      isDisplayed
+                        ? "bg-muted/30 border-border/50 opacity-75"
+                        : "bg-card hover:bg-muted/40 border-border hover:border-emerald-500/50"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold truncate text-foreground flex items-center gap-1.5">
+                          <Cctv className="size-3.5 text-primary shrink-0" />
+                          {c.name}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground truncate">{c.roomName} • {c.ip}</p>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={`text-[9px] shrink-0 font-mono ${
+                          isDisplayed
+                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                            : "bg-neutral-800 text-neutral-400"
+                        }`}
+                      >
+                        {isDisplayed ? "No Mosaico" : "Oculta"}
+                      </Badge>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-1.5 pt-1">
+                      {isDisplayed ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const slotIdx = orderedSlots.findIndex((s) => s?.id === c.id);
+                            if (slotIdx >= 0) handleRemoveSlot(slotIdx, c.name);
+                          }}
+                          className="h-6 text-[11px] px-2 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 gap-1"
+                        >
+                          <X className="size-3" />
+                          Remover do Mosaico
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            handleAddSlotToFirstAvailable(c.id);
+                            setIsAddScreenDialogOpen(false);
+                          }}
+                          className="h-6 text-[11px] px-2.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-semibold gap-1"
+                        >
+                          <Plus className="size-3" />
+                          Adicionar Tela
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="pt-2 border-t border-border flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">
+                Precisa cadastrar um novo equipamento RTSP/ONVIF?
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsAddScreenDialogOpen(false);
+                  setIsCameraManagerOpen(true);
+                }}
+                className="h-7 text-xs gap-1 border-primary/40 text-primary hover:bg-primary/10"
+              >
+                <Plus className="size-3.5" />
+                Cadastrar Nova Câmera IP
+              </Button>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="default" size="sm" onClick={() => setIsAddScreenDialogOpen(false)}>
+              Concluído
             </Button>
           </DialogFooter>
         </DialogContent>
