@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
-import { ShieldCheck, ShieldAlert, Shield, Lock, Unlock, Siren, BellRing, DoorClosed } from "lucide-react";
+import { ShieldCheck, Shield, Lock, Unlock, Siren } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
