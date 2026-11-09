@@ -202,6 +202,15 @@ export function StorageSettingsDialog({
       onSaveStorageConfig(newConfig);
     }
 
+    // Notifica o gravador NVR local no computador para usar a nova pasta escolhida
+    try {
+      fetch("http://127.0.0.1:8089/api/recorder/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recordingsDirectory: cleanRec }),
+      }).catch(() => {});
+    } catch {}
+
     if (onUpdateDisks) {
       const updatedDisks = disks.map((d) => {
         let mPath = d.mountPath;
