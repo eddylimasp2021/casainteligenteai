@@ -10,8 +10,8 @@ import { useHousehold } from "@/lib/household";
 import type { AlarmMode, SecuritySystemState } from "@/types/security";
 
 export function SecurityQuickControlWidget() {
-  const { currentHousehold } = useHousehold();
-  const householdId = currentHousehold?.id ?? "default";
+  const { current } = useHousehold();
+  const householdId = current?.id ?? "default";
   const [secState, setSecState] = useState<SecuritySystemState>(() =>
     getSecurityState(householdId)
   );

@@ -225,7 +225,7 @@ export function MembersManagement({
           </div>
         ) : (
           members.map((mem) => {
-            const roleInfo = ROLES_INFO[mem.role] || ROLES_INFO.member;
+            const roleInfo = (ROLES_INFO[mem.role] || ROLES_INFO.member)!;
             const Icon = roleInfo.icon;
             const isSelf = mem.user_id === currentUserId;
 
