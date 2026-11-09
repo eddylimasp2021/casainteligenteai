@@ -48,7 +48,7 @@ describe("DVR / NVR CCTV Surveillance System", () => {
 
       for (const camera of ptzCameras) {
         expect(camera.presets).toBeDefined();
-        expect(camera.presets!.length).toBeGreaterThan(0);
+        expect(camera.presets?.length ?? 0).toBeGreaterThan(0);
       }
     });
   });
@@ -92,7 +92,7 @@ describe("DVR / NVR CCTV Surveillance System", () => {
         expect(event.id).toBeDefined();
         expect(event.confidence).toBeGreaterThanOrEqual(0.8);
         expect(event.confidence).toBeLessThanOrEqual(1.0);
-        expect(["human", "vehicle", "motion", "tripwire", "tamper"]).toContain(event.type);
+        expect(["human", "vehicle", "motion", "tripwire", "tamper", "face_recognized", "face_unknown"]).toContain(event.type);
         expect(new Date(event.timestamp).getTime()).not.toBeNaN();
       }
     });

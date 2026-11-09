@@ -53,7 +53,7 @@ const STORAGE_LG_KEY = "homepulse_lg_client_key";
 const DEFAULT_SAVED_KEY = "b52bd229ae8d4df8c3a5e8d1825a14b4";
 export const DEFAULT_TV_TUNNEL_GATEWAY = "";
 
-import { callHassService, getStoredHassConfig } from "./home-assistant";
+import { callHassService, loadHassConfig } from "./home-assistant";
 
 export function getSmartTvGatewayUrl(): string {
   if (typeof window === "undefined") return "http://127.0.0.1:1985";
@@ -325,7 +325,7 @@ export async function sendLgWebOsCommand(
 
   // 2. TENTATIVA SECUNDÁRIA (FAILOVER): Home Assistant Bridge
   try {
-    const haConfig = getStoredHassConfig();
+    const haConfig = loadHassConfig();
     if (haConfig && haConfig.haUrl && haConfig.accessToken) {
       let service = "turn_off";
       let domain = "media_player";
