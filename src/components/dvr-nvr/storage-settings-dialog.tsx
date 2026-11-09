@@ -177,7 +177,7 @@ export function StorageSettingsDialog({
 
     // Identifica e valida o disco selecionado pelo usuario (C:, D:, E:, etc)
     const driveMatch = cleanRec.match(/^([A-Za-z]:)/);
-    const driveLetter = driveMatch ? driveMatch[1].toUpperCase() : 'D:';
+    const driveLetter = driveMatch?.[1]?.toUpperCase() ?? 'D:';
       toast.warning("A Unidade C: possui espaço crítico. Redirecionando automaticamente para a Unidade D:!");
       cleanRec = "D:\\Gravacoes_CFTV";
     if (/^c:/i.test(cleanSnap)) {
