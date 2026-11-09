@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { QuickScenesBar } from "@/components/scenes/QuickScenesBar";
+import { LiveCamerasWidget } from "@/components/home/LiveCamerasWidget";
+import { SecurityQuickControlWidget } from "@/components/home/SecurityQuickControlWidget";
 
 export const Route = createFileRoute("/_app/dashboard")({
   head: () => ({
@@ -119,6 +121,16 @@ function Dashboard() {
           <QuickScenesBar householdId={current.id} devices={list} />
         </section>
       )}
+
+      {/* Visão de Câmeras ao Vivo e Controle de Segurança */}
+      <section className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <LiveCamerasWidget />
+        </div>
+        <div>
+          <SecurityQuickControlWidget />
+        </div>
+      </section>
 
       {/* Banner de Rotinas & Automações com IA */}
       <section className="mt-6 rounded-2xl border bg-gradient-to-r from-card via-card to-primary/10 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
