@@ -225,7 +225,7 @@ function EnergyPage() {
                 <Tooltip
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
-                      const data = payload[0].payload;
+                      const data = payload[0]!.payload;
                       return (
                         <div className="rounded-xl border bg-background/95 p-2.5 shadow-md text-xs font-mono">
                           <p className="font-bold text-foreground">{data.hour}</p>
@@ -253,7 +253,7 @@ function EnergyPage() {
                 <Tooltip
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
-                      const data = payload[0].payload;
+                      const data = payload[0]!.payload;
                       return (
                         <div className="rounded-xl border bg-background/95 p-2.5 shadow-md text-xs font-mono">
                           <p className="font-bold text-foreground">{data.day}</p>

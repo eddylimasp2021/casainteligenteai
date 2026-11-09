@@ -127,7 +127,7 @@ export function calculateEnergyOverview(
   const todayIndex = new Date().getDay();
 
   for (let i = 6; i >= 0; i--) {
-    const dayName = daysOfWeek[(todayIndex - i + 7) % 7];
+    const dayName = daysOfWeek[(todayIndex - i + 7) % 7]!;
     const variance = 0.85 + Math.random() * 0.3;
     const dayKwh = Number((totalTodayKwh * variance).toFixed(1));
     dailyHistory.push({
@@ -149,7 +149,7 @@ export function calculateEnergyOverview(
 
   deviceConsumptions.forEach((d) => {
     const cat = categoryMap[d.category] ? d.category : "outros";
-    categoryMap[cat].kwh += d.monthKwh;
+    categoryMap[cat]!.kwh += d.monthKwh;
   });
 
   const categoryShares: EnergyCategoryShare[] = Object.entries(categoryMap)

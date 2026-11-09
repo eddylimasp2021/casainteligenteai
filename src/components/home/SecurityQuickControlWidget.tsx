@@ -1,25 +1,32 @@
 import { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
-import { ShieldCheck, ShieldAlert, Shield, Lock, Unlock, Siren, BellRing, DoorClosed } from "lucide-react";
+import { ShieldCheck, Shield, Lock, Unlock, Siren } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { getSecurityState, setSecurityMode, type SecurityState } from "@/lib/security";
+import { getSecurityState, setAlarmMode } from "@/lib/security";
+import { useHousehold } from "@/lib/household";
+import type { AlarmMode, SecuritySystemState } from "@/types/security";
 
 export function SecurityQuickControlWidget() {
-  const [secState, setSecState] = useState<SecurityState>(getSecurityState);
+  const { current } = useHousehold();
+  const householdId = current?.id ?? "default";
+  const [secState, setSecState] = useState<SecuritySystemState>(() =>
+    getSecurityState(householdId)
+  );
 
   useEffect(() => {
+    setSecState(getSecurityState(householdId));
     // Keep in sync with security changes
     const interval = setInterval(() => {
-      setSecState(getSecurityState());
+      setSecState(getSecurityState(householdId));
     }, 2000);
     return () => clearInterval(interval);
-  }, []);
+  }, [householdId]);
 
-  const handleToggleMode = (mode: SecurityState["mode"]) => {
-    const updated = setSecurityMode(mode);
+  const handleToggleMode = async (mode: AlarmMode) => {
+    const updated = await setAlarmMode(householdId, mode);
     setSecState(updated);
     toast.success(`Alarme perimetral atualizado para: ${mode.toUpperCase()}`);
   };
@@ -71,9 +78,9 @@ export function SecurityQuickControlWidget() {
           </Button>
 
           <Button
-            variant={secState.mode === "home" ? "default" : "outline"}
+            variant={secState.mode === "armed_home" ? "default" : "outline"}
             size="sm"
-            onClick={() => handleToggleMode("home")}
+            onClick={() => handleToggleMode("armed_home")}
             className="h-10 text-xs justify-start gap-2 border-border/60"
           >
             <Shield className="size-4 text-blue-400 shrink-0" />
@@ -84,9 +91,9 @@ export function SecurityQuickControlWidget() {
           </Button>
 
           <Button
-            variant={secState.mode === "away" ? "default" : "outline"}
+            variant={secState.mode === "armed_away" ? "default" : "outline"}
             size="sm"
-            onClick={() => handleToggleMode("away")}
+            onClick={() => handleToggleMode("armed_away")}
             className="h-10 text-xs justify-start gap-2 border-border/60"
           >
             <Lock className="size-4 text-purple-400 shrink-0" />
@@ -97,15 +104,15 @@ export function SecurityQuickControlWidget() {
           </Button>
 
           <Button
-            variant={secState.mode === "night" ? "default" : "outline"}
+            variant={secState.mode === "panic" ? "default" : "outline"}
             size="sm"
-            onClick={() => handleToggleMode("night")}
+            onClick={() => handleToggleMode("panic")}
             className="h-10 text-xs justify-start gap-2 border-border/60"
           >
-            <BellRing className="size-4 text-amber-400 shrink-0" />
+            <Siren className="size-4 text-red-400 shrink-0" />
             <div className="text-left leading-tight">
-              <span className="font-semibold block">Modo Noturno</span>
-              <span className="text-[10px] text-muted-foreground">Portas & janelas</span>
+              <span className="font-semibold block">Pânico</span>
+              <span className="text-[10px] text-muted-foreground">Emergência</span>
             </div>
           </Button>
         </div>
