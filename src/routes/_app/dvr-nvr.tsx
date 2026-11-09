@@ -354,6 +354,8 @@ function DvrNvrPage() {
   const [isGatewayModalOpen, setIsGatewayModalOpen] = useState(false);
   const [tempGatewayUrl, setTempGatewayUrl] = useState(gatewayUrl);
   const [isTestingPing, setIsTestingPing] = useState(false);
+  const [isAutoDiscovering, setIsAutoDiscovering] = useState(false);
+  const [isGatewayUnreachable, setIsGatewayUnreachable] = useState(false);
   const [pingResult, setPingResult] = useState<{ status: "ok" | "error"; latency?: number; streamsCount?: number; message?: string } | null>(null);
 
   // Ping test helper
