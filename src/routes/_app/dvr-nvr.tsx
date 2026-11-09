@@ -1571,20 +1571,20 @@ function DvrNvrPage() {
           ) : (
             /* Standard Grid Layout (1x1, 2x2, 3x2 6 Canais, 3x3) com Arrastar & Soltar e Quadros Pretos */
             <div
-              className={`grid transition-all duration-300 ${
+              className={`transition-all duration-300 ${
                 isProfessionalView
                   ? gridMode === "1x1"
-                    ? "grid-cols-1 w-full h-[95vh] gap-1"
+                    ? "grid grid-cols-1 w-full h-[calc(100vh-20px)] gap-1 p-1"
                     : gridMode === "2x2"
-                    ? "grid-cols-2 h-[95vh] gap-1.5"
+                    ? "grid grid-cols-2 grid-rows-2 w-full h-[calc(100vh-20px)] gap-1 p-1"
                     : gridMode === "3x3"
-                    ? "grid-cols-3 h-[95vh] gap-1.5"
-                    : "grid-cols-3 h-[95vh] gap-1.5"
+                    ? "grid grid-cols-3 grid-rows-3 w-full h-[calc(100vh-20px)] gap-1 p-1"
+                    : "grid grid-cols-3 grid-rows-2 w-full h-[calc(100vh-20px)] gap-1 p-1"
                   : gridMode === "1x1"
-                  ? "grid-cols-1 max-w-5xl mx-auto gap-4"
+                  ? "grid grid-cols-1 max-w-5xl mx-auto gap-4"
                   : gridMode === "2x2"
-                  ? "grid-cols-1 md:grid-cols-2 gap-4"
-                  : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                  ? "grid grid-cols-1 md:grid-cols-2 gap-4"
+                  : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
               }`}
             >
               {orderedSlots.map((camera, index) => {
@@ -1599,7 +1599,9 @@ function DvrNvrPage() {
                       onDragEnter={() => handleDragEnter(index)}
                       onDragEnd={handleDragEnd}
                       onDrop={() => handleDrop(index)}
-                      className={`relative aspect-video w-full rounded-2xl bg-black border border-neutral-800/80 shadow-2xl flex flex-col justify-between p-4 overflow-hidden select-none transition-all duration-200 cursor-grab active:cursor-grabbing group ${
+                      className={`relative w-full ${
+                        isProfessionalView ? "h-full rounded-md" : "aspect-video rounded-2xl"
+                      } bg-black border border-neutral-800/80 shadow-2xl flex flex-col justify-between p-4 overflow-hidden select-none transition-all duration-200 cursor-grab active:cursor-grabbing group ${
                         draggedIndex === index ? "opacity-30 scale-[0.98]" : ""
                       } ${
                         dragOverIndex === index
@@ -1667,7 +1669,9 @@ function DvrNvrPage() {
                     onDragEnter={() => handleDragEnter(index)}
                     onDragEnd={handleDragEnd}
                     onDrop={() => handleDrop(index)}
-                    className={`relative group transition-all duration-200 rounded-2xl ${
+                    className={`relative group transition-all duration-200 w-full ${
+                      isProfessionalView ? "h-full rounded-md" : "rounded-2xl"
+                    } ${
                       draggedIndex === index ? "opacity-30 scale-[0.98]" : ""
                     } ${
                       dragOverIndex === index

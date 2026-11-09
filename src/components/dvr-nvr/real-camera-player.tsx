@@ -963,14 +963,14 @@ export function RealCameraPlayer({
     <div
       ref={containerRef}
       onClick={onSelect}
-      className={`group relative flex flex-col overflow-hidden rounded-xl border bg-black shadow-lg transition-all duration-200 ${
+      className={`group relative flex flex-col overflow-hidden rounded-xl border bg-black shadow-lg transition-all duration-200 w-full h-full ${
         isFocused
           ? "ring-2 ring-primary ring-offset-2 ring-offset-background"
           : "hover:border-primary/50"
       }`}
     >
       {/* 16:9 Display Area */}
-      <div className="relative aspect-video w-full overflow-hidden bg-neutral-950 flex items-center justify-center">
+      <div className="relative w-full h-full min-h-[160px] overflow-hidden bg-neutral-950 flex items-center justify-center">
         {/* Instant Live Physical Camera Image (Always visible so user sees the camera image immediately from second 0) */}
         <img
           src={`${gatewayBase}/api/frame.jpeg?src=${encodeURIComponent(streamName)}&_t=${snapshotTimestamp}`}
