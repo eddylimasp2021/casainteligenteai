@@ -52,18 +52,20 @@ def start_camera_recording(cam, base_dir, seg_minutes):
     output_pattern = os.path.join(cam_dir, f"{cam_name}_%Y-%m-%d_%H-%M-%S.mp4")
     seg_seconds = seg_minutes * 60
     
-    # ffmpeg command with segment muxer and direct stream copy (ultralight, zero cpu)
+    # ffmpeg command com video copy direto e audio aac (evita erro de pcm_alaw em container mp4)
     cmd = [
         FFMPEG_EXE,
         "-y",
         "-rtsp_transport", "tcp",
         "-i", rtsp_url,
-        "-c", "copy",
+        "-c:v", "copy",
+        "-c:a", "aac",
         "-f", "segment",
         "-segment_time", str(seg_seconds),
         "-segment_format", "mp4",
         "-reset_timestamps", "1",
         "-strftime", "1",
+        "-movflags", "+faststart",
         output_pattern
     ]
     
