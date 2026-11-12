@@ -1146,12 +1146,12 @@ export function RealCameraPlayer({
           </div>
         )}
 
-        {/* Top OSD Bar: Camera info + Always-Visible Audio & Intercom Buttons */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-wrap items-center justify-between gap-2 p-2.5 text-xs font-mono text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] bg-gradient-to-b from-black/90 via-black/50 to-transparent z-20">
-          <div className="flex items-center gap-2">
-            <span className="flex items-center gap-1.5 font-bold tracking-wide">
+        {/* Top OSD Bar: Camera info + Audio & Intercom Buttons */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between gap-1.5 p-2 text-xs font-mono text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] bg-gradient-to-b from-black/90 via-black/50 to-transparent z-20 pr-16 group-hover:pr-24 transition-all">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="flex items-center gap-1.5 font-bold tracking-wide truncate max-w-[130px] sm:max-w-[180px]">
               <span
-                className={`inline-block size-2 rounded-full ${
+                className={`inline-block size-2 shrink-0 rounded-full ${
                   streamState === "playing"
                     ? "bg-emerald-500 shadow-[0_0_8px_#10b981]"
                     : streamState === "awaiting_frames"
@@ -1161,11 +1161,8 @@ export function RealCameraPlayer({
                     : "bg-rose-500"
                 }`}
               />
-              {camera.name}
+              <span className="truncate">{camera.name}</span>
             </span>
-            <Badge variant="outline" className="h-4 border-white/20 bg-black/40 px-1 text-[9px] text-white">
-              {camera.roomName}
-            </Badge>
 
             {/* Multi-Lens Switcher Pill in Top Bar */}
             {totalLenses > 1 && (
@@ -1177,60 +1174,41 @@ export function RealCameraPlayer({
                   setActiveLens(nextLens);
                   toast.info(`Alternado para: ${getLensLabel(nextLens, totalLenses)}`);
                 }}
-                className="pointer-events-auto flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-sans font-bold bg-primary/25 text-primary-foreground border border-primary/50 hover:bg-primary/40 transition-all cursor-pointer shadow-sm active:scale-95"
+                className="pointer-events-auto flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-sans font-bold bg-primary/25 text-primary-foreground border border-primary/50 hover:bg-primary/40 transition-all cursor-pointer shadow-sm active:scale-95 shrink-0"
                 title="Clique para alternar entre as lentes (1, 2, 3 ou Todas)"
               >
-                <Layers className="size-3 text-primary animate-pulse" />
+                <Layers className="size-2.5 text-primary animate-pulse" />
                 <span>{getLensLabel(activeLens, totalLenses)}</span>
               </button>
             )}
 
-            {/* Live Face ID Detection Toggle */}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowFaceOverlay((prev) => !prev);
-              }}
-              className={`pointer-events-auto flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-sans font-bold transition-all cursor-pointer shadow-sm active:scale-95 ${
-                showFaceOverlay
-                  ? "bg-emerald-500/25 text-emerald-300 border border-emerald-500/60 hover:bg-emerald-500/40"
-                  : "bg-black/50 text-neutral-400 border border-white/20 hover:text-white"
-              }`}
-              title="Ativar/Desativar detecção facial e caixas delimitadoras ao vivo"
-            >
-              <Users className="size-3 text-emerald-400" />
-              <span>Face ID {showFaceOverlay ? "ON" : "OFF"}</span>
-            </button>
-
             {isRecording && (
-              <span className="flex items-center gap-1.5 font-bold text-rose-400 bg-rose-500/20 border border-rose-500/40 px-2 py-0.5 rounded text-[10px] animate-pulse">
-                <span className="size-2 rounded-full bg-rose-500 animate-ping" />
-                REC {Math.floor(recordSeconds / 60).toString().padStart(2, "0")}:{(recordSeconds % 60).toString().padStart(2, "0")}
+              <span className="flex items-center gap-1 font-bold text-rose-400 bg-rose-500/20 border border-rose-500/40 px-1.5 py-0.5 rounded text-[9px] animate-pulse shrink-0">
+                <span className="size-1.5 rounded-full bg-rose-500 animate-ping" />
+                REC
               </span>
             )}
           </div>
 
-          {/* Central Action Center: Audio Listening Toggle & Push-To-Talk Intercom (ALWAYS VISIBLE) */}
-          <div className="flex items-center gap-1.5 pointer-events-auto">
+          {/* Central Action Center: Audio Listening Toggle & Push-To-Talk Intercom */}
+          <div className="flex items-center gap-1 pointer-events-auto shrink-0">
             {/* 1. Escutar Áudio (Listening Toggle & Volume) */}
             {isMuted ? (
               <button
                 type="button"
                 onClick={handleToggleAudio}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-sans font-semibold tracking-tight transition-all duration-200 shadow-md bg-neutral-900/95 text-amber-300 border border-amber-500/50 hover:bg-amber-500/20 hover:border-amber-400 active:scale-95 cursor-pointer"
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-sans font-semibold transition-all shadow-md bg-neutral-900/95 text-amber-300 border border-amber-500/50 hover:bg-amber-500/20 hover:border-amber-400 active:scale-95 cursor-pointer"
                 title="Clique para ativar o áudio do ambiente da câmera"
               >
                 <VolumeX className="size-3 text-amber-400 shrink-0" />
-                <span className="hidden xs:inline">Sem Áudio • Clique p/ Ouvir</span>
-                <span className="xs:hidden">Ouvir</span>
+                <span>Ouvir</span>
               </button>
             ) : (
-              <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-sans font-semibold shadow-md bg-emerald-950/90 text-emerald-300 border border-emerald-500/60 transition-all">
+              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-sans font-semibold shadow-md bg-emerald-950/90 text-emerald-300 border border-emerald-500/60 transition-all">
                 <button
                   type="button"
                   onClick={handleToggleAudio}
-                  className="flex items-center gap-1 hover:text-emerald-100 active:scale-95 cursor-pointer"
+                  className="flex items-center gap-0.5 hover:text-emerald-100 active:scale-95 cursor-pointer"
                   title="Clique para silenciar o áudio"
                 >
                   <Volume2 className="size-3 text-emerald-400 animate-pulse shrink-0" />
@@ -1246,10 +1224,9 @@ export function RealCameraPlayer({
                     e.stopPropagation();
                     handleVolumeChange(parseFloat(e.target.value));
                   }}
-                  className="w-12 h-1 accent-emerald-400 cursor-pointer"
+                  className="w-10 h-1 accent-emerald-400 cursor-pointer"
                   title={`Volume: ${Math.round(volume * 100)}%`}
                 />
-                <span className="text-[9px] text-emerald-400 font-mono">{Math.round(volume * 100)}%</span>
               </div>
             )}
 
@@ -1260,7 +1237,7 @@ export function RealCameraPlayer({
                 e.stopPropagation();
                 setIsIntercomOpen(true);
               }}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-sans font-semibold tracking-tight transition-all duration-200 shadow-md cursor-pointer active:scale-95 ${
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-sans font-semibold transition-all shadow-md cursor-pointer active:scale-95 ${
                 isTalking
                   ? "bg-rose-600 text-white border border-rose-400 animate-pulse"
                   : "bg-blue-950/90 hover:bg-blue-900 text-blue-200 border border-blue-500/50 hover:border-blue-400"
@@ -1268,13 +1245,13 @@ export function RealCameraPlayer({
               title="Abrir Interfone para falar no alto-falante da câmera"
             >
               <Mic className={`size-3 shrink-0 ${isTalking ? "text-white animate-bounce" : "text-blue-400"}`} />
-              <span>{isTalking ? "Transmitindo Voz..." : "Falar"}</span>
+              <span>{isTalking ? "Falando..." : "Falar"}</span>
             </button>
           </div>
 
-          <div className="flex items-center gap-2 font-mono">
+          <div className="hidden sm:flex items-center gap-1.5 font-mono text-[10px] shrink-0">
             {latencyMs !== null && (
-              <Badge className="h-4 bg-emerald-950/80 border border-emerald-500/40 text-[9px] text-emerald-400 gap-1 font-mono">
+              <Badge className="h-4 bg-emerald-950/80 border border-emerald-500/40 text-[9px] text-emerald-400 gap-0.5 font-mono px-1">
                 <Activity className="size-2.5" /> {latencyMs}ms
               </Badge>
             )}

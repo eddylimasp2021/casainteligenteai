@@ -200,7 +200,13 @@ function Shell() {
             Sem conexão. Os controles voltam a funcionar quando a internet retornar.
           </div>
         )}
-        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
+        <main
+          className={
+            pathname === "/dvr-nvr"
+              ? "w-full px-2 sm:px-4 lg:px-6 py-3"
+              : "mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8"
+          }
+        >
           <Outlet />
           <PwaInstallPrompt />
         </main>

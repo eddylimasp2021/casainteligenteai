@@ -1052,15 +1052,15 @@ function DvrNvrPage() {
 
   const renderSlotPicker = (index: number, currentId: string) =>
     gridMode === "1x1" ? null : (
-      <div className="absolute top-2 right-2 z-30 flex items-center gap-1 max-w-[70%]">
+      <div className="absolute top-2 right-2 z-30 flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200">
         <select
           aria-label={`Câmera da posição ${index + 1}`}
           value={currentId}
           onClick={(e) => e.stopPropagation()}
           onChange={(e) => assignSlot(index, e.target.value)}
-          className="h-7 rounded-md bg-background/90 backdrop-blur-md border border-border text-xs text-foreground px-1.5 truncate shadow-sm cursor-pointer hover:border-primary/50 transition-colors"
+          className="h-6 rounded-md bg-black/90 backdrop-blur-md border border-white/20 text-[11px] text-white px-1.5 max-w-[140px] truncate shadow-lg cursor-pointer hover:border-primary/80 transition-colors"
         >
-          <option value="">— Vazio (Quadro Preto) —</option>
+          <option value="">— Vazio —</option>
           {gridChannels.map((c) => (
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
@@ -1074,9 +1074,9 @@ function DvrNvrPage() {
               handleRemoveSlot(index, cam?.name);
             }}
             title="Remover esta tela do mosaico"
-            className="flex items-center justify-center size-7 rounded-md bg-black/80 hover:bg-rose-600 text-neutral-300 hover:text-white border border-white/20 shadow-md transition-colors shrink-0"
+            className="flex items-center justify-center size-6 rounded-md bg-black/90 hover:bg-rose-600 text-neutral-300 hover:text-white border border-white/20 shadow-md transition-colors shrink-0"
           >
-            <X className="size-3.5" />
+            <X className="size-3" />
           </button>
         )}
       </div>
@@ -1571,7 +1571,7 @@ function DvrNvrPage() {
           ) : (
             /* Standard Grid Layout (1x1, 2x2, 3x2 6 Canais, 3x3) com Arrastar & Soltar e Quadros Pretos */
             <div
-              className={`transition-all duration-300 ${
+              className={`transition-all duration-300 w-full ${
                 isProfessionalView
                   ? gridMode === "1x1"
                     ? "grid grid-cols-1 w-full h-[calc(100vh-20px)] gap-1 p-1"
@@ -1581,10 +1581,12 @@ function DvrNvrPage() {
                     ? "grid grid-cols-3 grid-rows-3 w-full h-[calc(100vh-20px)] gap-1 p-1"
                     : "grid grid-cols-3 grid-rows-2 w-full h-[calc(100vh-20px)] gap-1 p-1"
                   : gridMode === "1x1"
-                  ? "grid grid-cols-1 max-w-5xl mx-auto gap-4"
+                  ? "grid grid-cols-1 w-full max-w-6xl mx-auto gap-3"
                   : gridMode === "2x2"
-                  ? "grid grid-cols-1 md:grid-cols-2 gap-4"
-                  : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                  ? "grid grid-cols-1 md:grid-cols-2 gap-3 xl:gap-4"
+                  : gridMode === "3x3"
+                  ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 xl:gap-3"
+                  : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 xl:gap-3.5"
               }`}
             >
               {orderedSlots.map((camera, index) => {
@@ -1600,8 +1602,8 @@ function DvrNvrPage() {
                       onDragEnd={handleDragEnd}
                       onDrop={() => handleDrop(index)}
                       className={`relative w-full ${
-                        isProfessionalView ? "h-full rounded-md" : "aspect-video rounded-2xl"
-                      } bg-black border border-neutral-800/80 shadow-2xl flex flex-col justify-between p-4 overflow-hidden select-none transition-all duration-200 cursor-grab active:cursor-grabbing group ${
+                        isProfessionalView ? "h-full rounded-md" : "aspect-video rounded-xl"
+                      } bg-black/95 border border-neutral-800/80 shadow-md flex flex-col justify-between p-3 overflow-hidden select-none transition-all duration-200 cursor-grab active:cursor-grabbing group ${
                         draggedIndex === index ? "opacity-30 scale-[0.98]" : ""
                       } ${
                         dragOverIndex === index
@@ -1670,7 +1672,7 @@ function DvrNvrPage() {
                     onDragEnd={handleDragEnd}
                     onDrop={() => handleDrop(index)}
                     className={`relative group transition-all duration-200 w-full ${
-                      isProfessionalView ? "h-full rounded-md" : "rounded-2xl"
+                      isProfessionalView ? "h-full rounded-md" : "aspect-video rounded-xl"
                     } ${
                       draggedIndex === index ? "opacity-30 scale-[0.98]" : ""
                     } ${
