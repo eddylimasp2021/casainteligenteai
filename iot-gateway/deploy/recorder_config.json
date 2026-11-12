@@ -1,0 +1,19 @@
+{
+  "recordingsDirectory": "D:\\Gravacoes_CFTV",
+  "segmentMinutes": 15,
+  "enabled": true,
+  "cameras": [
+    {
+      "name": "Garagem_Rua",
+      "stream": "garagem_rua"
+    },
+    {
+      "name": "Camera_Externa_198",
+      "stream": "cam_192_168_0_198"
+    },
+    {
+      "name": "Camera_Tripla_240",
+      "stream": "cam_192_168_0_240"
+    }
+  ]
+}
