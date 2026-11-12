@@ -49,10 +49,10 @@ print("[5/6] Iniciando Gravador Físico NVR (MP4 contínuo no disco)...")
 recorder_proc = subprocess.Popen([sys.executable, RECORDER_PY], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 time.sleep(1)
 
-# 6. Start cloudflared and read stderr
+# 6. Start cloudflared with http2 (evita erro de handshake QUIC e erro 1033)
 print("[6/6] Conectando Túnel Seguro Cloudflare HTTPS (Aguarde ~7 segundos)...")
 cf_proc = subprocess.Popen(
-    [CLOUDFLARED_EXE, "tunnel", "--url", "http://127.0.0.1:1984"],
+    [CLOUDFLARED_EXE, "tunnel", "--url", "http://127.0.0.1:1984", "--protocol", "http2"],
     stderr=subprocess.PIPE,
     stdout=subprocess.DEVNULL,
     text=True,
