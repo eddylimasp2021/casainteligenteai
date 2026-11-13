@@ -44,6 +44,7 @@ import {
   Eye,
   EyeOff,
   Settings,
+  Pencil,
   Minimize2,
   Tv2,
 } from "lucide-react";
@@ -1066,18 +1067,36 @@ function DvrNvrPage() {
           ))}
         </select>
         {currentId && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              const cam = gridChannels.find((c) => c.id === currentId);
-              handleRemoveSlot(index, cam?.name);
-            }}
-            title="Remover esta tela do mosaico"
-            className="flex items-center justify-center size-6 rounded-md bg-black/90 hover:bg-rose-600 text-neutral-300 hover:text-white border border-white/20 shadow-md transition-colors shrink-0"
-          >
-            <X className="size-3" />
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                const baseId = currentId.split("__lens_")[0];
+                const cam = cameras.find((c) => c.id === baseId || c.id === currentId);
+                if (cam) {
+                  setCameraToEdit(cam);
+                  setIsCameraManagerOpen(true);
+                }
+              }}
+              title="Editar configurações desta câmera (IP, RTSP, credenciais)"
+              className="flex items-center justify-center size-6 rounded-md bg-black/90 hover:bg-primary text-neutral-300 hover:text-white border border-white/20 shadow-md transition-colors shrink-0"
+            >
+              <Pencil className="size-3" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                const cam = gridChannels.find((c) => c.id === currentId);
+                handleRemoveSlot(index, cam?.name);
+              }}
+              title="Remover esta tela do mosaico"
+              className="flex items-center justify-center size-6 rounded-md bg-black/90 hover:bg-rose-600 text-neutral-300 hover:text-white border border-white/20 shadow-md transition-colors shrink-0"
+            >
+              <X className="size-3" />
+            </button>
+          </>
         )}
       </div>
     );
@@ -1433,6 +1452,24 @@ function DvrNvrPage() {
               >
                 <Plus className="size-3.5" />
                 <span>Adicionar Tela</span>
+              </Button>
+
+              {/* Botão Editar Câmeras */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const targetCam = focusedCameraId 
+                    ? cameras.find(c => c.id === focusedCameraId.split("__lens_")[0]) || cameras[0]
+                    : cameras[0];
+                  setCameraToEdit(targetCam || null);
+                  setIsCameraManagerOpen(true);
+                }}
+                className="h-7 px-2.5 text-xs font-semibold gap-1.5 border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+                title="Editar parâmetros, IP, RTSP, credenciais e configurações de câmeras"
+              >
+                <Pencil className="size-3.5" />
+                <span>Editar Câmeras</span>
               </Button>
 
               {/* Reset Custom Grid Order Button */}
