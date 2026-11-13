@@ -371,7 +371,13 @@ export function TimelinePlayback({
               src={`${gatewayBase}${activeRecording.url}`}
               className="size-full object-contain"
               playsInline
+              controls
+              autoPlay
               muted={isMuted}
+              onError={(e) => {
+                console.warn("[Timeline] Erro ao decodificar arquivo:", e);
+                toast.error("O navegador não suportou o codec deste arquivo (H.265/HEVC). Use o botão Baixar para abrir no player do PC.");
+              }}
               onTimeUpdate={handleVideoTimeUpdate}
               onEnded={handleVideoEnded}
               onPlay={() => setIsPlaying(true)}

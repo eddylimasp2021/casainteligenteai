@@ -5,7 +5,7 @@
   "cameras": [
     {
       "name": "Garagem_Rua",
-      "stream": "garagem_rua"
+      "stream": "garagem_rua_h264"
     },
     {
       "name": "Camera_Externa_198",
@@ -13,7 +13,7 @@
     },
     {
       "name": "Camera_Tripla_240",
-      "stream": "cam_192_168_0_240"
+      "stream": "cam_192_168_0_240_h264"
     },
     {
       "name": "Camera_Yoosee_149",
