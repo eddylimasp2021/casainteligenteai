@@ -65,27 +65,17 @@ export function TimelinePlayback({
   const videoRef = useRef<HTMLVideoElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
 
-  // Resolved gateway URL with fallback
+  // Resolved gateway URL with fallback (Usa sempre a ponte de gravações ativa)
   const gatewayBase = useMemo(() => {
-    // 1. URL dedicada para gravações (Túnel das Gravações / Smart Bridge)
-    try {
-      const recUrl = localStorage.getItem("homepulse_dvr_recordings_url_v1");
-      if (recUrl && recUrl.trim()) return recUrl.trim().replace(/\/+$/, "");
-    } catch {}
-
-    if (propGatewayBase && propGatewayBase.trim()) {
+    // Se o propGatewayBase contiver /api/recordings acessível, tenta ele
+    if (propGatewayBase && propGatewayBase.startsWith("https://")) {
       return propGatewayBase.replace(/\/+$/, "");
     }
-    try {
-      const saved = localStorage.getItem("homepulse_dvr_gateway_url_v1");
-      if (saved && saved.trim() && !saved.includes("dreams-metal")) {
-        return saved.trim().replace(/\/+$/, "");
-      }
-    } catch {}
     const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
-    return isHttps
-      ? "https://kentucky-love-hitting-relates.trycloudflare.com"
-      : "http://127.0.0.1:1985";
+    if (isHttps) {
+      return "https://kentucky-love-hitting-relates.trycloudflare.com";
+    }
+    return "http://127.0.0.1:1985";
   }, [propGatewayBase]);
 
   const activeCamera = useMemo(() => {
@@ -117,21 +107,25 @@ export function TimelinePlayback({
   // 1. Fetch Real Recordings from API
   const fetchRecordings = async () => {
     setIsLoading(true);
-    // Tenta primeiro via gatewayBase (porta 1984 ou túnel Cloudflare) ou porta 8089 local
-    const endpointsToTry = [];
-    if (gatewayBase) {
-      endpointsToTry.push(`${gatewayBase}/api/recordings?camera=${encodeURIComponent(streamKey)}&date=${selectedDate}`);
+    const endpointsToTry = [
+      "https://kentucky-love-hitting-relates.trycloudflare.com",
+    ];
+    if (gatewayBase && !endpointsToTry.includes(gatewayBase)) {
+      endpointsToTry.unshift(gatewayBase);
     }
     if (typeof window !== "undefined" && window.location.protocol !== "https:") {
-      endpointsToTry.push(`http://127.0.0.1:8089/api/recordings?camera=${encodeURIComponent(streamKey)}&date=${selectedDate}`);
-      endpointsToTry.push(`http://192.168.0.117:8089/api/recordings?camera=${encodeURIComponent(streamKey)}&date=${selectedDate}`);
+      endpointsToTry.push("http://127.0.0.1:8089");
+      endpointsToTry.push("http://127.0.0.1:1985");
+      endpointsToTry.push("http://192.168.0.117:8089");
     }
 
     let loaded = false;
-    for (const targetUrl of endpointsToTry) {
+    for (const base of endpointsToTry) {
+      if (!base) continue;
+      const targetUrl = `${base.replace(/\/+$/, "")}/api/recordings?camera=${encodeURIComponent(streamKey)}&date=${selectedDate}`;
       try {
         const ctrl = new AbortController();
-        const tid = setTimeout(() => ctrl.abort(), 3500);
+        const tid = setTimeout(() => ctrl.abort(), 4000);
         const res = await fetch(targetUrl, { signal: ctrl.signal });
         clearTimeout(tid);
         if (res.ok) {
