@@ -126,6 +126,146 @@ class ApiHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(json.dumps({"ok": True, "opened": p}).encode("utf-8"))
+
+        elif self.path.startswith("/api/recordings"):
+            # GET /api/recordings?camera=garagem_rua&date=2026-11-13
+            from urllib.parse import urlparse, parse_qs
+            parsed = urlparse(self.path)
+            qs = parse_qs(parsed.query)
+            camera = qs.get("camera", [""])[0].strip()
+            date_str = qs.get("date", [""])[0].strip() or datetime.now().strftime("%Y-%m-%d")
+
+            cfg = load_config()
+            base_dir = cfg.get("recordingsDirectory", "D:\\Gravacoes_CFTV")
+
+            # Map camera names
+            cam_folder_map = {
+                "garagem_rua": "garagem_rua",
+                "cam_192_168_0_198": "Camera_Externa_198",
+                "cam_192_168_0_240": "Camera_Tripla_240",
+                "cam_192_168_0_149": "Camera_Yoosee_149",
+            }
+            target_folder = cam_folder_map.get(camera, camera)
+            cam_dir = os.path.join(base_dir, target_folder)
+
+            # Also check if files are in cam_dir or date_str subfolder
+            recordings = []
+            search_dirs = [cam_dir, os.path.join(cam_dir, date_str)]
+
+            for sdir in search_dirs:
+                if not os.path.isdir(sdir):
+                    continue
+                for f in sorted(os.listdir(sdir)):
+                    if not (f.endswith(".mp4") or f.endswith(".mkv")):
+                        continue
+                    # Match date if contained in filename (e.g. Garagem_Rua_2026-11-13_11-10-39.mp4)
+                    if date_str in f or os.path.basename(sdir) == date_str:
+                        f_path = os.path.join(sdir, f)
+                        try:
+                            stat = os.stat(f_path)
+                            # Filename format: Camera_Tripla_240_2026-11-12_15-00-02.mp4 or Garagem_Rua_2026-11-13_11-10-39.mp4
+                            clean_stem = f.replace(".mp4", "").replace(".mkv", "")
+                            parts = clean_stem.split("_")
+                            hour, minute, sec = 0, 0, 0
+                            # A última parte é a hora HH-MM-SS
+                            time_part = parts[-1]
+                            if "-" in time_part:
+                                subp = time_part.split("-")
+                                if len(subp) >= 2 and all(p.isdigit() for p in subp):
+                                    hour = int(subp[0])
+                                    minute = int(subp[1])
+                                    sec = int(subp[2]) if len(subp) > 2 else 0
+                            
+                            start_min = hour * 60 + minute
+                            duration = cfg.get("segmentMinutes", 15) * 60
+                            end_min = min(1439, start_min + int(duration / 60))
+
+                            rel_path = f"{target_folder}/{f}" if sdir == cam_dir else f"{target_folder}/{date_str}/{f}"
+
+                            recordings.append({
+                                "id": f"{camera}_{f}",
+                                "camera": camera,
+                                "filename": f,
+                                "date": date_str,
+                                "startTime": f"{hour:02d}:{minute:02d}:{sec:02d}",
+                                "startMinute": start_min,
+                                "endMinute": end_min,
+                                "durationSeconds": duration,
+                                "sizeBytes": stat.st_size,
+                                "url": f"/recordings/{rel_path}",
+                                "type": "continuous",
+                                "status": "ready"
+                            })
+                        except Exception as err:
+                            print(f"[RECORDER API] Erro ao ler metadados {f}: {err}")
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                "status": "ok",
+                "camera": camera,
+                "date": date_str,
+                "totalSegments": len(recordings),
+                "recordings": recordings
+            }).encode("utf-8"))
+
+        elif self.path.startswith("/recordings/"):
+            # Serve video with HTTP 206 Partial Content
+            clean_rel = self.path.replace("/recordings/", "").lstrip("/")
+            cfg = load_config()
+            full_path = os.path.join(cfg.get("recordingsDirectory", "D:\\Gravacoes_CFTV"), clean_rel)
+
+            if not os.path.isfile(full_path):
+                self.send_response(404)
+                self.end_headers()
+                self.wfile.write(b"Arquivo de gravacao nao encontrado.")
+                return
+
+            file_size = os.path.getsize(full_path)
+            range_header = self.headers.get("Range")
+
+            if range_header:
+                try:
+                    range_str = range_header.replace("bytes=", "").strip()
+                    start_str, end_str = range_str.split("-")
+                    start = int(start_str) if start_str else 0
+                    end = int(end_str) if end_str else file_size - 1
+                    if end >= file_size:
+                        end = file_size - 1
+                    length = end - start + 1
+
+                    self.send_response(206)
+                    self.send_header("Content-Type", "video/mp4")
+                    self.send_header("Accept-Ranges", "bytes")
+                    self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
+                    self.send_header("Content-Length", str(length))
+                    self.end_headers()
+
+                    with open(full_path, "rb") as f:
+                        f.seek(start)
+                        rem = length
+                        while rem > 0:
+                            chunk = f.read(min(65536, rem))
+                            if not chunk:
+                                break
+                            self.wfile.write(chunk)
+                            rem -= len(chunk)
+                    return
+                except:
+                    pass
+
+            self.send_response(200)
+            self.send_header("Content-Type", "video/mp4")
+            self.send_header("Content-Length", str(file_size))
+            self.send_header("Accept-Ranges", "bytes")
+            self.end_headers()
+            with open(full_path, "rb") as f:
+                while True:
+                    chunk = f.read(65536)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
         else:
             self.send_response(404)
             self.end_headers()

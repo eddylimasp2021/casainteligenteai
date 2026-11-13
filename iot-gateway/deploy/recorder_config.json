@@ -14,6 +14,10 @@
     {
       "name": "Camera_Tripla_240",
       "stream": "cam_192_168_0_240"
+    },
+    {
+      "name": "Camera_Yoosee_149",
+      "stream": "cam_192_168_0_149"
     }
   ]
 }

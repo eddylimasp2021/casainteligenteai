@@ -98,40 +98,57 @@ export function TimelinePlayback({
     if (cleanIp === "192.168.0.198" || lowerName.includes("198") || rawId.includes("198")) {
       return "cam_192_168_0_198";
     }
+    if (cleanIp === "192.168.0.149" || lowerName.includes("149") || lowerName.includes("yoosee") || rawId.includes("149")) {
+      return "cam_192_168_0_149";
+    }
     return rawStream || rawId || "garagem_rua";
   }, [activeCamera]);
 
   // 1. Fetch Real Recordings from API
   const fetchRecordings = async () => {
-    if (!gatewayBase) return;
     setIsLoading(true);
-    try {
-      const targetUrl = `${gatewayBase}/api/recordings?camera=${encodeURIComponent(streamKey)}&date=${selectedDate}`;
-      const res = await fetch(targetUrl);
-      if (res.ok) {
-        const data = await res.json();
-        const list: RecordingSegment[] = data.recordings || [];
-        setRecordings(list);
+    // Tenta primeiro via gatewayBase (porta 1984 ou túnel Cloudflare) ou porta 8089 local
+    const endpointsToTry = [];
+    if (gatewayBase) {
+      endpointsToTry.push(`${gatewayBase}/api/recordings?camera=${encodeURIComponent(streamKey)}&date=${selectedDate}`);
+    }
+    if (typeof window !== "undefined" && window.location.protocol !== "https:") {
+      endpointsToTry.push(`http://127.0.0.1:8089/api/recordings?camera=${encodeURIComponent(streamKey)}&date=${selectedDate}`);
+      endpointsToTry.push(`http://192.168.0.117:8089/api/recordings?camera=${encodeURIComponent(streamKey)}&date=${selectedDate}`);
+    }
 
-        if (list.length > 0) {
-          // If no active recording or active recording is not in current list, pick the most recent
-          const last = list[list.length - 1]!;
-          setActiveRecording(last);
-          setCurrentMinute(last.startMinute);
-        } else {
-          setActiveRecording(null);
+    let loaded = false;
+    for (const targetUrl of endpointsToTry) {
+      try {
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 3500);
+        const res = await fetch(targetUrl, { signal: ctrl.signal });
+        clearTimeout(tid);
+        if (res.ok) {
+          const data = await res.json();
+          const list: RecordingSegment[] = data.recordings || [];
+          setRecordings(list);
+
+          if (list.length > 0) {
+            const last = list[list.length - 1]!;
+            setActiveRecording(last);
+            setCurrentMinute(last.startMinute);
+          } else {
+            setActiveRecording(null);
+          }
+          loaded = true;
+          break;
         }
-      } else {
-        setRecordings([]);
-        setActiveRecording(null);
+      } catch (e) {
+        // tenta proximo endpoint
       }
-    } catch (e) {
-      console.warn("[TimelinePlayback] Erro ao buscar gravações:", e);
+    }
+
+    if (!loaded) {
       setRecordings([]);
       setActiveRecording(null);
-    } finally {
-      setIsLoading(false);
     }
+    setIsLoading(false);
   };
 
   useEffect(() => {
