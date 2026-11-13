@@ -44,28 +44,42 @@ active_recorders = {}
 
 def start_camera_recording(cam, base_dir, seg_minutes):
     cam_name = cam["name"]
-    stream = cam["stream"]
+    rtsp_url = cam.get("rtspUrl") or f"rtsp://127.0.0.1:8554/{cam.get('stream', cam_name)}"
+    codec_mode = cam.get("codec", "copy")
     cam_dir = os.path.join(base_dir, cam_name)
     os.makedirs(cam_dir, exist_ok=True)
     
-    rtsp_url = f"rtsp://127.0.0.1:8554/{stream}"
     output_pattern = os.path.join(cam_dir, f"{cam_name}_%Y-%m-%d_%H-%M-%S.mp4")
     seg_seconds = seg_minutes * 60
     
-    # ffmpeg command com video copy direto e audio aac (evita erro de pcm_alaw em container mp4)
+    # Monta comando FFmpeg com fMP4 (+frag_keyframe+empty_moov+default_base_moof)
+    # permitindo que cada arquivo gravado no HD físico seja reproduzido imediatamente no navegador!
     cmd = [
         FFMPEG_EXE,
         "-y",
-        "-rtsp_transport", "tcp",
         "-i", rtsp_url,
-        "-c:v", "copy",
+    ]
+    if codec_mode == "transcode_h264":
+        cmd += [
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-tune", "zerolatency",
+            "-profile:v", "baseline",
+            "-level", "3.0",
+            "-pix_fmt", "yuv420p",
+        ]
+    else:
+        cmd += [
+            "-c:v", "copy",
+        ]
+    cmd += [
         "-c:a", "aac",
         "-f", "segment",
         "-segment_time", str(seg_seconds),
         "-segment_format", "mp4",
+        "-segment_format_options", "movflags=+frag_keyframe+empty_moov+default_base_moof",
         "-reset_timestamps", "1",
         "-strftime", "1",
-        "-movflags", "+faststart",
         output_pattern
     ]
     
@@ -138,14 +152,27 @@ class ApiHandler(BaseHTTPRequestHandler):
             cfg = load_config()
             base_dir = cfg.get("recordingsDirectory", "D:\\Gravacoes_CFTV")
 
-            # Map camera names
+            # Map camera names with flexible fallback
             cam_folder_map = {
                 "garagem_rua": "garagem_rua",
+                "garagem": "garagem_rua",
                 "cam_192_168_0_198": "Camera_Externa_198",
+                "198": "Camera_Externa_198",
                 "cam_192_168_0_240": "Camera_Tripla_240",
+                "240": "Camera_Tripla_240",
+                "tripla": "Camera_Tripla_240",
                 "cam_192_168_0_149": "Camera_Yoosee_149",
+                "149": "Camera_Yoosee_149",
+                "yoosee": "Camera_Yoosee_149",
             }
-            target_folder = cam_folder_map.get(camera, camera)
+            cam_lower = camera.lower()
+            target_folder = None
+            for k, fld in cam_folder_map.items():
+                if k in cam_lower:
+                    target_folder = fld
+                    break
+            if not target_folder:
+                target_folder = cam_folder_map.get(camera, camera)
             cam_dir = os.path.join(base_dir, target_folder)
 
             # Also check if files are in cam_dir or date_str subfolder

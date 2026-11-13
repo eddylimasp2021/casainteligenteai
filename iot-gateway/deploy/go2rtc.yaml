@@ -27,7 +27,7 @@ webrtc:
 
 # 4. Transcoder FFmpeg com baixa latência e baseline para navegadores
 ffmpeg:
-  bin: "ffmpeg"
+  bin: "D:\\DEV-Apps\\casainteligenteai\\iot-gateway\\deploy\\bin\\ffmpeg.exe"
   h264: "-c:v libx264 -preset ultrafast -tune zerolatency -profile:v baseline -level 3.0 -pix_fmt yuv420p -g 15"
 
 # 5. Configuração de Streams (Câmeras IP Registradas)
@@ -36,34 +36,22 @@ streams:
   garagem_rua:
     - rtsp://admin:ambar786!@192.168.0.139:554/onvif1
 
-  # Câmera Garagem Rua H.264
-  garagem_rua_h264:
-    - ffmpeg:rtsp://127.0.0.1:8554/garagem_rua#video=h264#audio=copy
-
   # Câmera 192.168.0.198 (Stream Original RTSP)
   cam_192_168_0_198:
     - rtsp://admin:ambar786@192.168.0.198:554/onvif1
-
-  # Câmera 192.168.0.198 H.264
-  cam_192_168_0_198_h264:
-    - ffmpeg:rtsp://127.0.0.1:8554/cam_192_168_0_198#video=h264#audio=copy
 
   # Câmera 192.168.0.240 (Câmera Tripla Multi-Lente 3 em 1 - 1920x3240 Full HD)
   cam_192_168_0_240:
     - rtsp://admin:ambar786@@192.168.0.240:554/onvif1
 
-  # Câmera 192.168.0.240 H.264 (Transcodificado para navegadores sem suporte a HEVC)
-  cam_192_168_0_240_h264:
-    - ffmpeg:rtsp://127.0.0.1:8554/cam_192_168_0_240#video=h264#audio=copy
-
   # Câmera 192.168.0.149 (Yoosee RTSP Direto)
   cam_192_168_0_149:
     - rtsp://admin:ambar786!@192.168.0.149:554/onvif2
     - rtsp://admin:ambar786!@192.168.0.149:554/onvif1
-
-  # Câmera 192.168.0.149 H.264
-  cam_192_168_0_149_h264:
-    - ffmpeg:rtsp://127.0.0.1:8554/cam_192_168_0_149#video=h264#audio=copy
+  replay_stream:
+    - ffmpeg:D:\Gravacoes_CFTV\Camera_Tripla_240\Camera_Tripla_240_2026-11-13_11-24-00.mp4#video=h264
+  hls_vod_test:
+    - ffmpeg:D:\Gravacoes_CFTV\Camera_Tripla_240\Camera_Tripla_240_2026-11-13_11-24-00.mp4#video=h264
 
 # 6. Configuração de Logs com Rotação
 log:

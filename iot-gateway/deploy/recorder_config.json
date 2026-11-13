@@ -4,20 +4,24 @@
   "enabled": true,
   "cameras": [
     {
-      "name": "Garagem_Rua",
-      "stream": "garagem_rua_h264"
+      "name": "garagem_rua",
+      "rtspUrl": "rtsp://admin:ambar786!@192.168.0.139:554/onvif1",
+      "codec": "transcode_h264"
     },
     {
       "name": "Camera_Externa_198",
-      "stream": "cam_192_168_0_198"
+      "rtspUrl": "rtsp://admin:ambar786@192.168.0.198:554/onvif1",
+      "codec": "copy"
     },
     {
       "name": "Camera_Tripla_240",
-      "stream": "cam_192_168_0_240_h264"
+      "rtspUrl": "rtsp://admin:ambar786@@192.168.0.240:554/onvif1",
+      "codec": "transcode_h264"
     },
     {
       "name": "Camera_Yoosee_149",
-      "stream": "cam_192_168_0_149"
+      "rtspUrl": "rtsp://admin:ambar786!@192.168.0.149:554/onvif1",
+      "codec": "copy"
     }
   ]
 }
