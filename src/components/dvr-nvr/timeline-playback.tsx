@@ -63,6 +63,12 @@ export function TimelinePlayback({
 
   // Resolved gateway URL with fallback
   const gatewayBase = useMemo(() => {
+    // 1. URL dedicada para gravações (Túnel das Gravações / Smart Bridge)
+    try {
+      const recUrl = localStorage.getItem("homepulse_dvr_recordings_url_v1");
+      if (recUrl && recUrl.trim()) return recUrl.trim().replace(/\/+$/, "");
+    } catch {}
+
     if (propGatewayBase && propGatewayBase.trim()) {
       return propGatewayBase.replace(/\/+$/, "");
     }
@@ -74,8 +80,8 @@ export function TimelinePlayback({
     } catch {}
     const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
     return isHttps
-      ? ""
-      : "http://127.0.0.1:1984";
+      ? "https://kentucky-love-hitting-relates.trycloudflare.com"
+      : "http://127.0.0.1:1985";
   }, [propGatewayBase]);
 
   const activeCamera = useMemo(() => {

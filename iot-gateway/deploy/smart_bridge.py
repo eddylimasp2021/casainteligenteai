@@ -178,6 +178,34 @@ class SmartTvBridgeHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"ok": True, "devices": devices}).encode("utf-8"))
             return
 
+        elif path.startswith("/api/recordings") or path.startswith("/recordings/"):
+            # Encaminha transparentemente para o Recorder na porta 8089
+            try:
+                import urllib.request
+                target_url = f"http://127.0.0.1:8089{self.path}"
+                req = urllib.request.Request(target_url)
+                if "Range" in self.headers:
+                    req.add_header("Range", self.headers["Range"])
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    self.send_response(resp.status)
+                    for k, v in resp.headers.items():
+                        if k.lower() not in ["access-control-allow-origin", "transfer-encoding"]:
+                            self.send_header(k, v)
+                    self._send_cors()
+                    self.end_headers()
+                    while True:
+                        chunk = resp.read(65536)
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                    return
+            except Exception as e:
+                self.send_response(502)
+                self._send_cors()
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": f"Recorder proxy error: {str(e)}"}).encode("utf-8"))
+                return
+
         self.send_response(404)
         self.end_headers()
 
