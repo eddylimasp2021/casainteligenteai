@@ -210,6 +210,51 @@ class ApiHandler(BaseHTTPRequestHandler):
                 "recordings": recordings
             }).encode("utf-8"))
 
+        elif self.path.startswith("/api/transcode/"):
+            # Transcodifica sob demanda um arquivo H.265 para H.264 streamável no navegador
+            # GET /api/transcode/<clean_rel>
+            clean_rel = self.path.replace("/api/transcode/", "").lstrip("/")
+            cfg = load_config()
+            full_path = os.path.join(cfg.get("recordingsDirectory", "D:\\Gravacoes_CFTV"), clean_rel)
+
+            if not os.path.isfile(full_path):
+                self.send_response(404)
+                self.end_headers()
+                return
+
+            self.send_response(200)
+            self.send_header("Content-Type", "video/mp4")
+            self.end_headers()
+
+            # Executa ffmpeg convertendo em tempo real para MP4 fragmentado H.264
+            cmd = [
+                FFMPEG_EXE,
+                "-i", full_path,
+                "-c:v", "libx264",
+                "-preset", "ultrafast",
+                "-tune", "zerolatency",
+                "-profile:v", "baseline",
+                "-level", "3.0",
+                "-pix_fmt", "yuv420p",
+                "-vf", "scale=-2:720",
+                "-c:a", "aac",
+                "-b:a", "64k",
+                "-f", "mp4",
+                "-movflags", "frag_keyframe+empty_moov+default_base_moof",
+                "pipe:1"
+            ]
+            try:
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                while True:
+                    data = proc.stdout.read(65536)
+                    if not data:
+                        break
+                    self.wfile.write(data)
+                proc.wait()
+            except:
+                pass
+            return
+
         elif self.path.startswith("/recordings/"):
             # Serve video with HTTP 206 Partial Content
             clean_rel = self.path.replace("/recordings/", "").lstrip("/")

@@ -178,7 +178,7 @@ class SmartTvBridgeHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"ok": True, "devices": devices}).encode("utf-8"))
             return
 
-        elif path.startswith("/api/recordings") or path.startswith("/recordings/"):
+        elif path.startswith("/api/recordings") or path.startswith("/recordings/") or path.startswith("/api/transcode/"):
             # Encaminha transparentemente para o Recorder na porta 8089
             try:
                 import urllib.request

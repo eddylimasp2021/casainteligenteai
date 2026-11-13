@@ -61,6 +61,7 @@ export function TimelinePlayback({
   const [videoDuration, setVideoDuration] = useState<number>(0);
   const [isClipping, setIsClipping] = useState<boolean>(false);
   const [clipStart, setClipStart] = useState<number | null>(null);
+  const [useCompatibilityMode, setUseCompatibilityMode] = useState<boolean>(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -367,19 +368,25 @@ export function TimelinePlayback({
       <div className="relative aspect-video w-full overflow-hidden rounded-2xl border bg-black shadow-2xl flex items-center justify-center">
         {activeRecording ? (
           <>
-            {/* Real HTML5 Video Player */}
+            {/* Real HTML5 Video Player com Auto-Fallback para Transcode H.264 */}
             <video
               ref={videoRef}
-              key={activeRecording.id}
-              src={`${gatewayBase}${activeRecording.url}`}
+              key={`${activeRecording.id}_${useCompatibilityMode}`}
+              src={
+                useCompatibilityMode
+                  ? `${gatewayBase}/api/transcode/${activeRecording.url.replace(/^\/?recordings\//, "")}`
+                  : `${gatewayBase}${activeRecording.url}`
+              }
               className="size-full object-contain"
               playsInline
               controls
               autoPlay
               muted={isMuted}
-              onError={(e) => {
-                console.warn("[Timeline] Erro ao decodificar arquivo:", e);
-                toast.error("O navegador não suportou o codec deste arquivo (H.265/HEVC). Use o botão Baixar para abrir no player do PC.");
+              onError={() => {
+                if (!useCompatibilityMode) {
+                  setUseCompatibilityMode(true);
+                  toast.info("Ativando modo de compatibilidade instantâneo (Transcodificação H.264)...");
+                }
               }}
               onTimeUpdate={handleVideoTimeUpdate}
               onEnded={handleVideoEnded}
