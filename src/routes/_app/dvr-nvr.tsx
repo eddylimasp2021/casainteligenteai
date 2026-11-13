@@ -47,6 +47,8 @@ import {
   Pencil,
   Minimize2,
   Tv2,
+  QrCode,
+  Smartphone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -574,6 +576,7 @@ function DvrNvrPage() {
     }
 
     if (currentId) {
+      // 1. Busca inicial da nuvem
       supabase
         .from("devices")
         .select("ip_address, state")
@@ -594,6 +597,42 @@ function DvrNvrPage() {
             }
           }
         });
+
+      // 2. Realtime Subscription: Se o servidor atualizar o gateway, o celular recebe na hora sem refresh!
+      const channel = supabase
+        .channel(`cftv_gateway_sync_${currentId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "devices",
+            filter: `household_id=eq.${currentId}`,
+          },
+          (payload) => {
+            const newRecord = (payload.new || {}) as any;
+            if (newRecord?.device_type === "cftv_gateway") {
+              const incomingUrl = newRecord?.state?.gateway_url || newRecord?.ip_address;
+              if (incomingUrl && typeof incomingUrl === "string" && incomingUrl.startsWith("http")) {
+                const clean = incomingUrl.trim().replace(/\/+$/, "");
+                setGatewayUrl(clean);
+                setTempGatewayUrl(clean);
+                setIsGatewayUnreachable(false);
+                try {
+                  localStorage.setItem("homepulse_dvr_gateway_url_v1", clean);
+                } catch {}
+                toast.success("Gateway CFTV atualizado automaticamente pela nuvem!", {
+                  description: clean,
+                });
+              }
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
   }, [currentId]);
 
@@ -672,6 +711,7 @@ function DvrNvrPage() {
   const [isMultiLensModalOpen, setIsMultiLensModalOpen] = useState(false);
   const [isFacialModalOpen, setIsFacialModalOpen] = useState(false);
   const [isAddScreenDialogOpen, setIsAddScreenDialogOpen] = useState(false);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [authorizedPersons, setAuthorizedPersons] = useState<AuthorizedPerson[]>(() => {
     try {
       const saved = localStorage.getItem("homepulse_dvr_authorized_faces_v1");
@@ -1452,6 +1492,19 @@ function DvrNvrPage() {
               >
                 <Plus className="size-3.5" />
                 <span>Adicionar Tela</span>
+              </Button>
+
+              {/* Botão Conectar Celular (QR Code) */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsQrModalOpen(true)}
+                className="h-7 px-2.5 text-xs font-semibold gap-1.5 border-sky-500/40 bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 hover:text-sky-300"
+                title="Abrir QR Code para conectar direto pelo celular"
+              >
+                <QrCode className="size-3.5" />
+                <span className="hidden sm:inline">Conectar Celular</span>
+                <span className="sm:hidden">Celular</span>
               </Button>
 
               {/* Botão Editar Câmeras */}
@@ -2530,6 +2583,74 @@ function DvrNvrPage() {
           <DialogFooter>
             <Button variant="default" size="sm" onClick={() => setIsAddScreenDialogOpen(false)}>
               Concluído
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Conectar Celular / QR Code */}
+      <Dialog open={isQrModalOpen} onOpenChange={setIsQrModalOpen}>
+        <DialogContent className="max-w-md bg-card/95 border-border/80 backdrop-blur-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg font-bold">
+              <div className="p-2 rounded-xl bg-sky-500/10 text-sky-400">
+                <Smartphone className="size-5" />
+              </div>
+              Conectar Celular ao DVR
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Aponte a câmera do seu celular para o QR Code abaixo para abrir o mosaico de câmeras instantaneamente, sem precisar digitar nenhum link.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col items-center justify-center p-4 space-y-4">
+            {/* QR Code Container */}
+            <div className="p-4 bg-white rounded-2xl shadow-2xl border-4 border-sky-500/20 flex flex-col items-center justify-center">
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(
+                  gatewayUrl
+                    ? `https://casainteligenteai.lovable.app/dvr-nvr?gateway=${gatewayUrl}`
+                    : "https://casainteligenteai.lovable.app/dvr-nvr"
+                )}`}
+                alt="QR Code Celular"
+                className="w-56 h-56 object-contain"
+                loading="eager"
+              />
+            </div>
+
+            <div className="w-full bg-muted/40 p-3 rounded-xl border border-border/60 text-xs space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
+                <span>Link Direto de Conexão:</span>
+                <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-400 border-sky-500/30">
+                  {gatewayUrl.startsWith("https://") ? "Túnel HTTPS Seguro" : "Rede Local"}
+                </Badge>
+              </div>
+              <div className="font-mono text-[11px] text-foreground break-all bg-background/80 p-2 rounded-lg border border-border/40 select-all">
+                {gatewayUrl
+                  ? `https://casainteligenteai.lovable.app/dvr-nvr?gateway=${gatewayUrl}`
+                  : "https://casainteligenteai.lovable.app/dvr-nvr"}
+              </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  const fullUrl = gatewayUrl
+                    ? `https://casainteligenteai.lovable.app/dvr-nvr?gateway=${gatewayUrl}`
+                    : "https://casainteligenteai.lovable.app/dvr-nvr";
+                  navigator.clipboard.writeText(fullUrl);
+                  toast.success("Link copiado para a Área de Transferência!");
+                }}
+                className="w-full h-7 text-xs gap-1.5 mt-2"
+              >
+                <Copy className="size-3" />
+                Copiar Link para WhatsApp
+              </Button>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="default" size="sm" onClick={() => setIsQrModalOpen(false)} className="w-full sm:w-auto">
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>
