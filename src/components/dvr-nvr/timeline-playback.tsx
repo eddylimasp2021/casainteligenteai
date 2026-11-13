@@ -74,7 +74,7 @@ export function TimelinePlayback({
     }
     const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
     if (isHttps) {
-      return "https://represented-sensors-stress-sustainable.trycloudflare.com";
+      return "https://federation-continuous-helpful-inputs.trycloudflare.com";
     }
     return "http://127.0.0.1:1985";
   }, [propGatewayBase]);
@@ -109,7 +109,7 @@ export function TimelinePlayback({
   const fetchRecordings = async () => {
     setIsLoading(true);
     const endpointsToTry = [
-      "https://represented-sensors-stress-sustainable.trycloudflare.com",
+      "https://federation-continuous-helpful-inputs.trycloudflare.com",
     ];
     if (gatewayBase && !endpointsToTry.includes(gatewayBase)) {
       endpointsToTry.unshift(gatewayBase);
