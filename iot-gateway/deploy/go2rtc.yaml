@@ -56,8 +56,9 @@ streams:
   cam_192_168_0_240_h264:
     - ffmpeg:rtsp://127.0.0.1:8554/cam_192_168_0_240#video=h264#audio=copy
 
-  # Câmera 192.168.0.149 (Stream Original RTSP)
+  # Câmera 192.168.0.149 (Yoosee RTSP Direto)
   cam_192_168_0_149:
+    - rtsp://admin:ambar786!@192.168.0.149:554/onvif2
     - rtsp://admin:ambar786!@192.168.0.149:554/onvif1
 
   # Câmera 192.168.0.149 H.264
