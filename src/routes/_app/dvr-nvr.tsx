@@ -153,6 +153,18 @@ function getCanonicalCameraKey(cam: { id?: string; name?: string; ip?: string; s
   ) {
     return "cam_garagem";
   }
+  if (
+    ip.includes("192.168.0.149") ||
+    name.includes("149") ||
+    name.includes("yoosee") ||
+    name.includes("entrada") ||
+    name.includes("portão") ||
+    stream.includes("149") ||
+    id.includes("149") ||
+    id === "cam-01"
+  ) {
+    return "cam_149";
+  }
   return id || ip || name;
 }
 
@@ -221,6 +233,47 @@ function DvrNvrPage() {
         if (init198) canonicalMap.set("cam_198", init198);
       }
 
+      // Ensure 192.168.0.149 (Yoosee) is present exactly once
+      if (!canonicalMap.has("cam_149")) {
+        const init149 = INITIAL_CAMERAS.find((c) => c.ip === "192.168.0.149") || {
+          id: "cam-real-149",
+          name: "Câmera Yoosee (192.168.0.149)",
+          roomName: "Rua / Externa",
+          ip: "192.168.0.149",
+          port: 554,
+          onvifPort: 5000,
+          manufacturer: "Yoosee",
+          model: "Câmera IP Yoosee (/onvif2)",
+          protocol: "RTSP",
+          rtspPath: "/onvif2",
+          subStreamPath: "/onvif2",
+          username: "admin",
+          password: "",
+          streamName: "cam_192_168_0_149",
+          activeProtocol: "WebRTC" as const,
+          resolution: "1080p (1920x1080)",
+          fps: 30,
+          bitrateKbps: 4096,
+          codec: "H.264",
+          status: "online",
+          hasPtz: true,
+          hasTwoWayAudio: true,
+          hasNightVision: true,
+          nightVisionActive: false,
+          recordingMode: "continuous",
+          viewMode: "stream",
+          aiFeatures: {
+            motionDetection: true,
+            humanDetection: true,
+            vehicleDetection: true,
+            lineCrossing: true,
+            facialRecognition: false,
+          },
+          presets: [{ id: 1, name: "Vista Geral" }],
+        };
+        canonicalMap.set("cam_149", init149 as IpCamera);
+      }
+
       const normalized = Array.from(canonicalMap.values()).map((c) => {
         const key = getCanonicalCameraKey(c);
         if (key === "cam_garagem") {
@@ -255,6 +308,19 @@ function DvrNvrPage() {
             roomName: "Área Externa",
             ip: "192.168.0.198",
             streamName: "cam_192_168_0_198",
+            activeProtocol: "WebRTC" as const,
+          };
+        }
+        if (key === "cam_149") {
+          return {
+            ...c,
+            id: "cam-real-149",
+            name: "Câmera Yoosee (192.168.0.149)",
+            roomName: "Rua / Externa",
+            ip: "192.168.0.149",
+            streamName: "cam_192_168_0_149",
+            rtspPath: "/onvif2",
+            subStreamPath: "/onvif2",
             activeProtocol: "WebRTC" as const,
           };
         }
