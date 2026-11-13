@@ -347,6 +347,20 @@ function DvrNvrPage() {
   });
 
   const [gatewayUrl, setGatewayUrl] = useState<string>(() => {
+    // 1. Prioridade máxima: Parâmetro da URL ?gateway=
+    if (typeof window !== "undefined") {
+      try {
+        const searchParams = new URLSearchParams(window.location.search);
+        const gw = searchParams.get("gateway");
+        if (gw && gw.trim()) {
+          const cleanGw = decodeURIComponent(gw).trim().replace(/\/+$/, "");
+          localStorage.setItem("homepulse_dvr_gateway_url_v1", cleanGw);
+          return cleanGw;
+        }
+      } catch {}
+    }
+
+    // 2. Salvo no localStorage
     try {
       const saved = localStorage.getItem("homepulse_dvr_gateway_url_v1");
       if (saved && saved.trim()) {
@@ -357,8 +371,10 @@ function DvrNvrPage() {
         return saved.trim();
       }
     } catch {}
+
+    // 3. Fallback inteligente: se for HTTPS (como lovable.app no celular), usar o túnel atual de backup
     const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
-    return isHttps ? "" : "http://127.0.0.1:1984";
+    return isHttps ? "https://sue-norfolk-holder-rebecca.trycloudflare.com" : "http://127.0.0.1:1984";
   });
   const [isGatewayModalOpen, setIsGatewayModalOpen] = useState(false);
   const [tempGatewayUrl, setTempGatewayUrl] = useState(gatewayUrl);
@@ -575,65 +591,65 @@ function DvrNvrPage() {
       }
     }
 
-    if (currentId) {
-      // 1. Busca inicial da nuvem
-      supabase
-        .from("devices")
-        .select("ip_address, state")
-        .eq("household_id", currentId)
-        .eq("device_type", "cftv_gateway")
-        .maybeSingle()
-        .then(({ data }) => {
-          const cloudUrl = (data?.state as any)?.gateway_url || data?.ip_address;
-          if (cloudUrl && typeof cloudUrl === "string" && cloudUrl.startsWith("http")) {
-            const clean = cloudUrl.trim().replace(/\/+$/, "");
-            if (!clean.includes("cake-studied-rendered-contemporary")) {
+    // Se não veio ?gateway= na URL, busca do banco de dados na nuvem
+    const targetHousehold = currentId || "casa-principal-master";
+    supabase
+      .from("devices")
+      .select("ip_address, state")
+      .eq("device_type", "cftv_gateway")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        const cloudUrl = (data?.state as any)?.gateway_url || data?.ip_address;
+        if (cloudUrl && typeof cloudUrl === "string" && cloudUrl.startsWith("http")) {
+          const clean = cloudUrl.trim().replace(/\/+$/, "");
+          if (!clean.includes("cake-studied-rendered-contemporary")) {
+            setGatewayUrl(clean);
+            setTempGatewayUrl(clean);
+            setIsGatewayUnreachable(false);
+            try {
+              localStorage.setItem("homepulse_dvr_gateway_url_v1", clean);
+            } catch {}
+          }
+        }
+      });
+
+    // 2. Realtime Subscription: Se o servidor atualizar o gateway, o celular recebe na hora sem refresh!
+    const channel = supabase
+      .channel(`cftv_gateway_sync_all`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "devices",
+          filter: `device_type=eq.cftv_gateway`,
+        },
+        (payload) => {
+          const newRecord = (payload.new || {}) as any;
+          if (newRecord?.device_type === "cftv_gateway") {
+            const incomingUrl = newRecord?.state?.gateway_url || newRecord?.ip_address;
+            if (incomingUrl && typeof incomingUrl === "string" && incomingUrl.startsWith("http")) {
+              const clean = incomingUrl.trim().replace(/\/+$/, "");
               setGatewayUrl(clean);
               setTempGatewayUrl(clean);
               setIsGatewayUnreachable(false);
               try {
                 localStorage.setItem("homepulse_dvr_gateway_url_v1", clean);
               } catch {}
+              toast.success("Gateway CFTV atualizado automaticamente pela nuvem!", {
+                description: clean,
+              });
             }
           }
-        });
+        }
+      )
+      .subscribe();
 
-      // 2. Realtime Subscription: Se o servidor atualizar o gateway, o celular recebe na hora sem refresh!
-      const channel = supabase
-        .channel(`cftv_gateway_sync_${currentId}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "devices",
-            filter: `household_id=eq.${currentId}`,
-          },
-          (payload) => {
-            const newRecord = (payload.new || {}) as any;
-            if (newRecord?.device_type === "cftv_gateway") {
-              const incomingUrl = newRecord?.state?.gateway_url || newRecord?.ip_address;
-              if (incomingUrl && typeof incomingUrl === "string" && incomingUrl.startsWith("http")) {
-                const clean = incomingUrl.trim().replace(/\/+$/, "");
-                setGatewayUrl(clean);
-                setTempGatewayUrl(clean);
-                setIsGatewayUnreachable(false);
-                try {
-                  localStorage.setItem("homepulse_dvr_gateway_url_v1", clean);
-                } catch {}
-                toast.success("Gateway CFTV atualizado automaticamente pela nuvem!", {
-                  description: clean,
-                });
-              }
-            }
-          }
-        )
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [currentId]);
 
   // Monitora a saúde da conexão com o gateway
