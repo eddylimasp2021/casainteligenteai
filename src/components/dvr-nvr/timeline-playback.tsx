@@ -74,7 +74,7 @@ export function TimelinePlayback({
     }
     const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
     if (isHttps) {
-      return "https://kentucky-love-hitting-relates.trycloudflare.com";
+      return "https://coming-more-capability-conversations.trycloudflare.com";
     }
     return "http://127.0.0.1:1985";
   }, [propGatewayBase]);
@@ -109,7 +109,7 @@ export function TimelinePlayback({
   const fetchRecordings = async () => {
     setIsLoading(true);
     const endpointsToTry = [
-      "https://kentucky-love-hitting-relates.trycloudflare.com",
+      "https://coming-more-capability-conversations.trycloudflare.com",
     ];
     if (gatewayBase && !endpointsToTry.includes(gatewayBase)) {
       endpointsToTry.unshift(gatewayBase);
