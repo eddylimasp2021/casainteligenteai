@@ -93,8 +93,15 @@ if tunnel_url:
         pass
     
     app_url = f"https://casainteligenteai.lovable.app/dvr-nvr?gateway={tunnel_url}"
-    print(f"\n Abrindo no seu navegador: {app_url}")
+    print(f"\n [NUVEM] Abrindo aplicação e sincronizando link com seus celulares: {app_url}")
     webbrowser.open(app_url)
+    
+    # Salva também um arquivo de status com o link ativo atual
+    try:
+        with open(os.path.join(DEPLOY_DIR, "gateway_url_ativa.txt"), "w", encoding="utf-8") as f:
+            f.write(tunnel_url.strip())
+    except:
+        pass
 else:
     print(" [AVISO] O túnel demorou mais que o esperado.")
     print(" Abrindo aplicação no modo local: http://127.0.0.1:1984")
