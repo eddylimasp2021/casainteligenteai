@@ -134,9 +134,12 @@ export function TimelinePlayback({
           setRecordings(list);
 
           if (list.length > 0) {
-            const last = list[list.length - 1]!;
-            setActiveRecording(last);
-            setCurrentMinute(last.startMinute);
+            // Escolhe o último segmento já CONCLUÍDO (penúltimo ou último com tamanho fechado)
+            // para não tentar tocar o arquivo que ainda está aberto sendo gravado no segundo exato
+            const readySegments = list.length > 1 ? list.slice(0, list.length - 1) : list;
+            const chosen = readySegments[readySegments.length - 1]!;
+            setActiveRecording(chosen);
+            setCurrentMinute(chosen.startMinute);
           } else {
             setActiveRecording(null);
           }
