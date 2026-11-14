@@ -141,6 +141,69 @@ class ApiHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({"ok": True, "opened": p}).encode("utf-8"))
 
+        elif self.path.startswith("/api/recordings/dates"):
+            # GET /api/recordings/dates?camera=...
+            from urllib.parse import urlparse, parse_qs
+            import re
+            parsed = urlparse(self.path)
+            qs = parse_qs(parsed.query)
+            camera = qs.get("camera", [""])[0].strip()
+
+            cfg = load_config()
+            base_dir = cfg.get("recordingsDirectory", "D:\\Gravacoes_CFTV")
+            cam_folder_map = {
+                "garagem_rua": "garagem_rua",
+                "garagem": "garagem_rua",
+                "cam_192_168_0_198": "Camera_Externa_198",
+                "198": "Camera_Externa_198",
+                "cam_192_168_0_240": "Camera_Tripla_240",
+                "240": "Camera_Tripla_240",
+                "tripla": "Camera_Tripla_240",
+                "cam_192_168_0_149": "Camera_Yoosee_149",
+                "149": "Camera_Yoosee_149",
+                "yoosee": "Camera_Yoosee_149",
+            }
+            cam_lower = camera.lower()
+            target_folder = None
+            for k, fld in cam_folder_map.items():
+                if k in cam_lower:
+                    target_folder = fld
+                    break
+            if not target_folder:
+                target_folder = cam_folder_map.get(camera, camera)
+
+            dates_dict = {}
+            if target_folder and os.path.isdir(os.path.join(base_dir, target_folder)):
+                search_folders = [os.path.join(base_dir, target_folder)]
+            else:
+                search_folders = [os.path.join(base_dir, f) for f in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, f))]
+
+            for sdir in search_folders:
+                if not os.path.isdir(sdir):
+                    continue
+                for f in os.listdir(sdir):
+                    if not (f.endswith(".mp4") or f.endswith(".mkv")):
+                        continue
+                    m = re.search(r'(\d{4}-\d{2}-\d{2})', f)
+                    if m:
+                        d = m.group(1)
+                        try:
+                            sz = os.path.getsize(os.path.join(sdir, f))
+                            if sz > 100 * 1024:
+                                if d not in dates_dict:
+                                    dates_dict[d] = {"date": d, "count": 0, "sizeBytes": 0}
+                                dates_dict[d]["count"] += 1
+                                dates_dict[d]["sizeBytes"] += sz
+                        except:
+                            pass
+
+            sorted_dates = sorted(list(dates_dict.values()), key=lambda x: x["date"], reverse=True)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "ok", "camera": camera, "dates": sorted_dates}).encode("utf-8"))
+            return
+
         elif self.path.startswith("/api/recordings"):
             # GET /api/recordings?camera=garagem_rua&date=2026-11-13
             from urllib.parse import urlparse, parse_qs

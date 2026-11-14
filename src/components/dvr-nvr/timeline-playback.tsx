@@ -3,7 +3,8 @@ import {
   Play, Pause, FastForward, Rewind, 
   Download, Calendar as CalendarIcon, Clock, Scissors,
   ChevronLeft, ChevronRight, Volume2, VolumeX, RefreshCw,
-  HardDrive, Film, AlertCircle
+  HardDrive, Film, AlertCircle, Sparkles, CheckCircle2,
+  ListVideo, ZoomIn, ZoomOut, Eye, Check, ExternalLink
 } from "lucide-react";
 import type { IpCamera } from "@/types/dvr-nvr";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,12 @@ export interface RecordingSegment {
   url: string;
   type: string;
   status: string;
+}
+
+export interface AvailableDate {
+  date: string;
+  count: number;
+  sizeBytes: number;
 }
 
 interface TimelinePlaybackProps {
@@ -48,6 +55,7 @@ export function TimelinePlayback({
   });
 
   const [recordings, setRecordings] = useState<RecordingSegment[]>([]);
+  const [availableDates, setAvailableDates] = useState<AvailableDate[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [activeRecording, setActiveRecording] = useState<RecordingSegment | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -61,14 +69,16 @@ export function TimelinePlayback({
   const [videoDuration, setVideoDuration] = useState<number>(0);
   const [isClipping, setIsClipping] = useState<boolean>(false);
   const [clipStart, setClipStart] = useState<number | null>(null);
-  const [useCompatibilityMode, setUseCompatibilityMode] = useState<boolean>(false);
+  const [showSegmentList, setShowSegmentList] = useState<boolean>(false);
+  const [zoomMode, setZoomMode] = useState<"24h" | "12h" | "6h">("24h");
+  // Default to true so all browser playback is instant & 100% compatible with H.264 / H.265
+  const [useCompatibilityMode, setUseCompatibilityMode] = useState<boolean>(true);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
 
   // Resolved gateway URL with fallback (Usa sempre a ponte de gravações ativa)
   const gatewayBase = useMemo(() => {
-    // Se o propGatewayBase contiver /api/recordings acessível, tenta ele
     if (propGatewayBase && propGatewayBase.startsWith("https://")) {
       return propGatewayBase.replace(/\/+$/, "");
     }
@@ -105,15 +115,48 @@ export function TimelinePlayback({
     return rawStream || rawId || "garagem_rua";
   }, [activeCamera]);
 
-  // 1. Fetch Real Recordings from API
+  // 1. Fetch Available Dates for the active camera
+  const fetchAvailableDates = async () => {
+    const endpointsToTry = [
+      gatewayBase,
+      "https://applications-county-lucy-annual.trycloudflare.com",
+    ];
+    if (typeof window !== "undefined" && window.location.protocol !== "https:") {
+      endpointsToTry.push("http://127.0.0.1:1985");
+      endpointsToTry.push("http://127.0.0.1:8089");
+    }
+
+    for (const base of endpointsToTry) {
+      if (!base) continue;
+      const targetUrl = `${base.replace(/\/+$/, "")}/api/recordings/dates?camera=${encodeURIComponent(streamKey)}`;
+      try {
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 4000);
+        const res = await fetch(targetUrl, { signal: ctrl.signal });
+        clearTimeout(tid);
+        if (res.ok) {
+          const data = await res.json();
+          const dList: AvailableDate[] = data.dates || [];
+          setAvailableDates(dList);
+          // If current selectedDate has no recordings and we found dates, auto-pick the latest one!
+          if (dList.length > 0 && !dList.some((d) => d.date === selectedDate)) {
+            setSelectedDate(dList[0]!.date);
+          }
+          break;
+        }
+      } catch (e) {
+        // continue to next endpoint
+      }
+    }
+  };
+
+  // 2. Fetch Real Recordings from API
   const fetchRecordings = async () => {
     setIsLoading(true);
     const endpointsToTry = [
+      gatewayBase,
       "https://applications-county-lucy-annual.trycloudflare.com",
     ];
-    if (gatewayBase && !endpointsToTry.includes(gatewayBase)) {
-      endpointsToTry.unshift(gatewayBase);
-    }
     if (typeof window !== "undefined" && window.location.protocol !== "https:") {
       endpointsToTry.push("http://127.0.0.1:8089");
       endpointsToTry.push("http://127.0.0.1:1985");
@@ -135,10 +178,8 @@ export function TimelinePlayback({
           setRecordings(list);
 
           if (list.length > 0) {
-            // Escolhe o último segmento já CONCLUÍDO (penúltimo ou último com tamanho fechado)
-            // para não tentar tocar o arquivo que ainda está aberto sendo gravado no segundo exato
-            const readySegments = list.length > 1 ? list.slice(0, list.length - 1) : list;
-            const chosen = readySegments[readySegments.length - 1]!;
+            // Escolhe o último segmento estável gravado
+            const chosen = list[list.length - 1]!;
             setActiveRecording(chosen);
             setCurrentMinute(chosen.startMinute);
           } else {
@@ -158,6 +199,10 @@ export function TimelinePlayback({
     }
     setIsLoading(false);
   };
+
+  useEffect(() => {
+    fetchAvailableDates();
+  }, [streamKey, gatewayBase]);
 
   useEffect(() => {
     fetchRecordings();
@@ -293,21 +338,33 @@ export function TimelinePlayback({
     });
   };
 
-  // Total disk space used by today's recordings
+  // Total disk space used by selected date recordings
   const totalBytesForDay = useMemo(() => {
     return recordings.reduce((acc, r) => acc + (r.sizeBytes || 0), 0);
   }, [recordings]);
 
   const totalMegabytes = (totalBytesForDay / (1024 * 1024)).toFixed(1);
 
+  // Play a specific segment from the list
+  const playSegment = (seg: RecordingSegment) => {
+    setActiveRecording(seg);
+    setCurrentMinute(seg.startMinute);
+    setTimeout(() => {
+      if (videoRef.current) {
+        videoRef.current.currentTime = 0;
+        videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
+      }
+    }, 150);
+  };
+
   return (
     <div className="space-y-4">
       {/* Top Playback Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-card p-4 shadow-sm">
         {/* Camera Selector & Date Picker */}
         <div className="flex flex-wrap items-center gap-3">
           <Select value={selectedCameraId} onValueChange={onSelectCamera}>
-            <SelectTrigger className="w-60 font-semibold">
+            <SelectTrigger className="w-64 font-semibold">
               <SelectValue placeholder="Selecione a câmera" />
             </SelectTrigger>
             <SelectContent>
@@ -334,13 +391,27 @@ export function TimelinePlayback({
           <Button
             size="sm"
             variant="outline"
-            onClick={fetchRecordings}
+            onClick={() => {
+              fetchAvailableDates();
+              fetchRecordings();
+            }}
             disabled={isLoading}
             className="gap-1 text-xs"
             title="Recarregar gravações do disco D:"
           >
             <RefreshCw className={`size-3.5 ${isLoading ? "animate-spin text-primary" : ""}`} />
             Buscar
+          </Button>
+
+          {/* Toggle Segment List Drawer */}
+          <Button
+            size="sm"
+            variant={showSegmentList ? "default" : "outline"}
+            onClick={() => setShowSegmentList(!showSegmentList)}
+            className="gap-1.5 text-xs font-semibold"
+          >
+            <ListVideo className="size-3.5" />
+            {showSegmentList ? "Ocultar Segmentos" : `Segmentos (${recordings.length})`}
           </Button>
 
           {/* Disk & Recordings Badge */}
@@ -364,11 +435,43 @@ export function TimelinePlayback({
         </div>
       </div>
 
+      {/* Available Dates Quick Navigator Pills */}
+      {availableDates.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-xl border bg-muted/20 text-xs">
+          <span className="font-semibold text-muted-foreground flex items-center gap-1.5 mr-1">
+            <CalendarIcon className="size-3.5 text-primary" /> Datas com Gravação no Disco:
+          </span>
+          {availableDates.map((item) => {
+            const isSelected = item.date === selectedDate;
+            const mb = (item.sizeBytes / (1024 * 1024)).toFixed(1);
+            return (
+              <Button
+                key={item.date}
+                size="sm"
+                variant={isSelected ? "default" : "outline"}
+                className={`h-7 px-3 text-xs font-mono font-bold transition-all ${
+                  isSelected 
+                    ? "shadow-sm border-primary" 
+                    : "hover:border-primary/50 text-foreground"
+                }`}
+                onClick={() => setSelectedDate(item.date)}
+              >
+                {item.date}
+                <span className={`ml-1.5 text-[10px] font-normal ${isSelected ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
+                  ({item.count} blocos • {mb} MB)
+                </span>
+                {isSelected && <Check className="size-3 ml-1" />}
+              </Button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Main Video Playback Screen */}
       <div className="relative aspect-video w-full overflow-hidden rounded-2xl border bg-black shadow-2xl flex items-center justify-center">
         {activeRecording ? (
           <>
-            {/* Real HTML5 Video Player com Auto-Fallback para Transcode H.264 */}
+            {/* Real HTML5 Video Player with Guaranteed H.264 Transcode Stream */}
             <video
               ref={videoRef}
               key={`${activeRecording.id}_${useCompatibilityMode}`}
@@ -395,7 +498,7 @@ export function TimelinePlayback({
             />
 
             {/* OSD Watermark Header */}
-            <div className="absolute top-4 left-4 font-mono text-xs text-white/90 bg-black/75 px-3 py-1.5 rounded-lg border border-white/10 backdrop-blur-md flex items-center gap-2 shadow-lg">
+            <div className="absolute top-4 left-4 font-mono text-xs text-white/90 bg-black/80 px-3 py-1.5 rounded-lg border border-white/10 backdrop-blur-md flex items-center gap-2 shadow-lg">
               <Film className="size-3.5 text-emerald-400" />
               <span>{activeCamera.name}</span>
               <span className="text-white/40">•</span>
@@ -404,14 +507,14 @@ export function TimelinePlayback({
 
             {/* Right OSD Controls */}
             <div className="absolute top-4 right-4 flex items-center gap-2">
-              <Badge className="bg-black/75 text-emerald-400 border border-emerald-500/30 font-mono text-xs py-1 px-2.5 backdrop-blur-md">
+              <Badge className="bg-black/80 text-emerald-400 border border-emerald-500/30 font-mono text-xs py-1 px-2.5 backdrop-blur-md">
                 VELOCIDADE: {playbackSpeed}x
               </Badge>
               <Button
                 size="icon"
                 variant="ghost"
                 onClick={() => setIsMuted(!isMuted)}
-                className="size-8 rounded-lg bg-black/75 text-white hover:bg-black/90 border border-white/10"
+                className="size-8 rounded-lg bg-black/80 text-white hover:bg-black/90 border border-white/10"
                 title={isMuted ? "Ativar Áudio" : "Mutar Áudio"}
               >
                 {isMuted ? <VolumeX className="size-4 text-rose-400" /> : <Volume2 className="size-4 text-emerald-400" />}
@@ -428,29 +531,96 @@ export function TimelinePlayback({
             )}
           </>
         ) : (
-          /* Empty / No Recordings State */
-          <div className="text-center space-y-3 p-6 max-w-md">
-            <div className="size-14 mx-auto rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center">
-              <AlertCircle className="size-7 text-amber-400" />
+          /* Empty / No Recordings State with Smart Date Suggestions */
+          <div className="text-center space-y-4 p-6 max-w-md">
+            <div className="size-16 mx-auto rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center">
+              <AlertCircle className="size-8 text-amber-400" />
             </div>
-            <h3 className="text-lg font-bold text-white">Nenhuma Gravação nesta Data</h3>
-            <p className="text-xs text-neutral-400 leading-relaxed">
-              Não foram encontrados arquivos de vídeo gravados no disco <strong>D:\Gravacoes_CFTV</strong> para a câmera{" "}
-              <strong className="text-white">{activeCamera.name}</strong> no dia <strong>{selectedDate}</strong>.
-            </p>
-            <div className="pt-2">
-              <Button
-                size="sm"
-                variant="default"
-                onClick={fetchRecordings}
-                className="gap-2 font-semibold"
-              >
-                <RefreshCw className="size-4" /> Verificar Novamente no Disco D:
-              </Button>
+            <div className="space-y-1">
+              <h3 className="text-lg font-bold text-white">Nenhuma Gravação nesta Data</h3>
+              <p className="text-xs text-neutral-400 leading-relaxed">
+                Não foram encontrados arquivos de vídeo gravados no disco <strong>D:\Gravacoes_CFTV</strong> para a câmera{" "}
+                <strong className="text-white">{activeCamera.name}</strong> no dia <strong>{selectedDate}</strong>.
+              </p>
             </div>
+
+            {availableDates.length > 0 ? (
+              <div className="pt-2 p-3 rounded-xl bg-neutral-900/80 border border-neutral-800 text-left space-y-2">
+                <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
+                  <Sparkles className="size-3.5" /> Gravações encontradas em outras datas:
+                </span>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {availableDates.map((d) => (
+                    <Button
+                      key={d.date}
+                      size="sm"
+                      variant="default"
+                      className="font-mono text-xs font-bold gap-1"
+                      onClick={() => setSelectedDate(d.date)}
+                    >
+                      <CalendarIcon className="size-3.5" />
+                      Ir para {d.date} ({d.count} blocos)
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="pt-2">
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={() => {
+                    fetchAvailableDates();
+                    fetchRecordings();
+                  }}
+                  className="gap-2 font-semibold"
+                >
+                  <RefreshCw className="size-4" /> Verificar Novamente no Disco D:
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {/* Collapsible Segment List Grid */}
+      {showSegmentList && recordings.length > 0 && (
+        <div className="space-y-3 rounded-2xl border bg-card p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 font-mono">
+              <ListVideo className="size-4 text-primary" /> Segmentos Gravados no Disco D ({recordings.length})
+            </h4>
+            <span className="text-xs text-muted-foreground">Clique em um bloco para reproduzir instantaneamente</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 max-h-48 overflow-y-auto p-1">
+            {recordings.map((rec, i) => {
+              const isCur = activeRecording?.id === rec.id;
+              const mb = (rec.sizeBytes / (1024 * 1024)).toFixed(1);
+              return (
+                <button
+                  key={rec.id}
+                  onClick={() => playSegment(rec)}
+                  className={`flex flex-col p-2 rounded-xl text-left border transition-all text-xs font-mono ${
+                    isCur
+                      ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                      : "bg-muted/40 hover:bg-muted border-border hover:border-primary/40 text-foreground"
+                  }`}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="font-bold flex items-center gap-1">
+                      <Play className="size-2.5" /> {rec.startTime}
+                    </span>
+                    <span className="text-[10px] opacity-75">#{i + 1}</span>
+                  </div>
+                  <div className="text-[10px] opacity-80 mt-1">
+                    {Math.round(rec.durationSeconds / 60)} min • {mb} MB
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* 24-Hour Interactive Timeline Bar */}
       <div className="space-y-3 rounded-2xl border bg-card p-5 shadow-sm">
@@ -460,7 +630,7 @@ export function TimelinePlayback({
           </span>
           <div className="flex items-center gap-3">
             {activeRecording && (
-              <span className="text-xs text-muted-foreground font-mono">
+              <span className="text-xs text-muted-foreground font-mono hidden sm:inline-block">
                 Segmento: <strong className="text-foreground">{activeRecording.filename}</strong> (
                 {formatSeconds(videoCurrentTime)} / {formatSeconds(videoDuration || activeRecording.durationSeconds)})
               </span>
@@ -513,14 +683,7 @@ export function TimelinePlayback({
                   title={`Gravação: ${rec.startTime} (${rec.durationSeconds}s, ${(rec.sizeBytes / (1024 * 1024)).toFixed(1)} MB) - Clique para reproduzir`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    setActiveRecording(rec);
-                    setCurrentMinute(rec.startMinute);
-                    setTimeout(() => {
-                      if (videoRef.current) {
-                        videoRef.current.currentTime = 0;
-                        videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
-                      }
-                    }, 100);
+                    playSegment(rec);
                   }}
                 />
               );
