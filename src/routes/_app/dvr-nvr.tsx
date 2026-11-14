@@ -438,9 +438,9 @@ function DvrNvrPage() {
       }
     } catch {}
 
-    // 3. Fallback inteligente: se for HTTPS (como lovable.app no celular), usar o túnel atual de backup
+    // 3. Fallback inteligente: se for HTTPS (como lovable.app no celular), usar o túnel atual ativo
     const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
-    return isHttps ? "https://sue-norfolk-holder-rebecca.trycloudflare.com" : "http://127.0.0.1:1984";
+    return isHttps ? "https://partial-quit-finally-win.trycloudflare.com" : "http://127.0.0.1:1984";
   });
   const [isGatewayModalOpen, setIsGatewayModalOpen] = useState(false);
   const [tempGatewayUrl, setTempGatewayUrl] = useState(gatewayUrl);
@@ -544,6 +544,16 @@ function DvrNvrPage() {
   const handleAutoDiscoverGateway = async (silent = false) => {
     setIsAutoDiscovering(true);
     const candidates: string[] = [];
+
+    // Candidato 0: public/cftv_gateway.json (Sincronizado automaticamente)
+    try {
+      const resJson = await fetch("/cftv_gateway.json?t=" + Date.now());
+      if (resJson.ok) {
+        const gj = await resJson.json();
+        const jsonUrl = (gj?.tunnel_url || gj?.gateway_url || "").trim().replace(/\/+$/, "");
+        if (jsonUrl && !candidates.includes(jsonUrl)) candidates.unshift(jsonUrl);
+      }
+    } catch {}
 
     // Candidato 1: Parâmetro da URL (?gateway=)
     if (typeof window !== "undefined") {

@@ -206,6 +206,38 @@ class SmartTvBridgeHandler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({"error": f"Recorder proxy error: {str(e)}"}).encode("utf-8"))
                 return
 
+        # Proxy transparente para go2rtc (porta 1984) - Câmeras ao vivo, WebRTC, Streams, Frames MJPEG
+        elif path.startswith("/api/") or path.startswith("/webrtc"):
+            try:
+                import urllib.request, urllib.error
+                target_url = f"http://127.0.0.1:1984{self.path}"
+                req = urllib.request.Request(target_url)
+                for k, v in self.headers.items():
+                    if k.lower() not in ["host", "content-length"]:
+                        req.add_header(k, v)
+                try:
+                    resp = urllib.request.urlopen(req, timeout=10)
+                except urllib.error.HTTPError as err_resp:
+                    resp = err_resp
+                self.send_response(resp.status)
+                for k, v in resp.headers.items():
+                    if k.lower() not in ["access-control-allow-origin", "transfer-encoding"]:
+                        self.send_header(k, v)
+                self._send_cors()
+                self.end_headers()
+                while True:
+                    chunk = resp.read(65536)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                return
+            except Exception as e:
+                self.send_response(502)
+                self._send_cors()
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": f"go2rtc proxy GET error: {str(e)}"}).encode("utf-8"))
+                return
+
         self.send_response(404)
         self.end_headers()
 
@@ -213,9 +245,9 @@ class SmartTvBridgeHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
         content_len = int(self.headers.get("Content-Length", 0))
-        post_data = self.rfile.read(content_len).decode("utf-8") if content_len > 0 else "{}"
+        raw_body = self.rfile.read(content_len) if content_len > 0 else b""
         try:
-            body = json.loads(post_data)
+            body = json.loads(raw_body.decode("utf-8"))
         except:
             body = {}
 
@@ -252,6 +284,38 @@ class SmartTvBridgeHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({"ok": True, "message": "Wake-on-LAN disparado."}).encode("utf-8"))
             return
+
+        # Proxy POST para go2rtc (essencial para handshake SDP WebRTC do navegador!)
+        elif path.startswith("/api/webrtc") or path.startswith("/api/"):
+            try:
+                import urllib.request, urllib.error
+                target_url = f"http://127.0.0.1:1984{self.path}"
+                req = urllib.request.Request(target_url, data=raw_body, method="POST")
+                for k, v in self.headers.items():
+                    if k.lower() not in ["host", "content-length"]:
+                        req.add_header(k, v)
+                try:
+                    resp = urllib.request.urlopen(req, timeout=10)
+                except urllib.error.HTTPError as err_resp:
+                    resp = err_resp
+                self.send_response(resp.status)
+                for k, v in resp.headers.items():
+                    if k.lower() not in ["access-control-allow-origin", "transfer-encoding"]:
+                        self.send_header(k, v)
+                self._send_cors()
+                self.end_headers()
+                while True:
+                    chunk = resp.read(65536)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                return
+            except Exception as e:
+                self.send_response(502)
+                self._send_cors()
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": f"go2rtc proxy POST error: {str(e)}"}).encode("utf-8"))
+                return
 
         self.send_response(404)
         self.end_headers()

@@ -471,14 +471,14 @@ export function RealCameraPlayer({
       // 7. Transition to awaiting_frames state — DO NOT declare victory until frames are decoded!
       setStreamState("awaiting_frames");
 
-      // Verify that video frames actually decode within 10 seconds, else gracefully switch to Snapshot
+      // Verify that video frames actually decode within 2.5 seconds, else gracefully switch to Snapshot
       frameTimeoutRef.current = window.setTimeout(() => {
         const v = videoRef.current;
         if (v && (v.videoWidth === 0 || v.readyState < 2)) {
           console.warn("WebRTC keyframe sync delay. Activating continuous Snapshot JPEG stream.");
           setProtocol("Snapshot");
         }
-      }, 10000);
+      }, 2500);
 
       // 8. Track real latency periodically via RTCPeerConnection stats
       pingIntervalRef.current = window.setInterval(async () => {
@@ -519,13 +519,13 @@ export function RealCameraPlayer({
     setLatencyMs(150);
   }, [disconnectStream]);
 
-  // Relaxed snapshot refresh only when explicitly in Snapshot mode (prevents overloading go2rtc)
+  // Snapshot refresh interval in ms (fast 1000ms for fluid sub-second refresh)
   useEffect(() => {
     if (protocol !== "Snapshot" || streamState !== "playing") return;
 
     const interval = setInterval(() => {
       setSnapshotTimestamp(Date.now());
-    }, 2000);
+    }, 1000);
 
     return () => clearInterval(interval);
   }, [protocol, streamState]);
