@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import json
+import shutil
 import subprocess
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -17,6 +18,7 @@ DEFAULT_CONFIG = {
     "recordingsDirectory": "D:\\Gravacoes_CFTV",
     "segmentMinutes": 15,
     "enabled": True,
+    "minFreeDiskGb": 5.0,  # Prioridade de re-gravação em loop FIFO ao atingir 5 GB livres
     "cameras": [
         {"name": "Garagem_Rua", "stream": "garagem_rua"},
         {"name": "Camera_Externa_198", "stream": "cam_192_168_0_198"},
@@ -32,6 +34,52 @@ def load_config():
         except:
             pass
     return DEFAULT_CONFIG
+
+def purge_oldest_recordings_if_needed(base_dir, min_free_gb=5.0):
+    """
+    Monitor de prioridade de armazenamento FIFO:
+    Quando o espaço livre no HD for inferior a min_free_gb (padrão 5 GB),
+    localiza as gravações mais antigas (.mp4, .ts) e apaga gradativamente,
+    garantindo que o HD nunca lote e regrave por cima das mais antigas.
+    """
+    try:
+        total, used, free = shutil.disk_usage(base_dir)
+        free_gb = free / (1024 ** 3)
+        if free_gb < min_free_gb:
+            target_free_bytes = (min_free_gb + 1.0) * (1024 ** 3) # Margem segura (+1 GB)
+            needed_bytes = target_free_bytes - free
+            print(f"[FIFO LOOP] ALERTA: Disco abaixo de {min_free_gb} GB ({free_gb:.2f} GB livres). Liberando ~{needed_bytes / (1024**2):.1f} MB...")
+
+            files = []
+            for root, _, filenames in os.walk(base_dir):
+                for fn in filenames:
+                    if fn.lower().endswith((".mp4", ".ts", ".mkv", ".avi")):
+                        fp = os.path.join(root, fn)
+                        try:
+                            st = os.stat(fp)
+                            files.append((st.st_mtime, st.st_size, fp))
+                        except Exception:
+                            pass
+
+            # Ordena pelo arquivo mais antigo primeiro (FIFO)
+            files.sort(key=lambda x: x[0])
+
+            deleted_bytes = 0
+            deleted_count = 0
+            for mtime, fsize, fp in files:
+                try:
+                    os.remove(fp)
+                    deleted_bytes += fsize
+                    deleted_count += 1
+                    if deleted_bytes >= needed_bytes:
+                        break
+                except Exception as e:
+                    print(f"[FIFO LOOP] Aviso: Não foi possível apagar {fp}: {e}")
+
+            _, _, new_free = shutil.disk_usage(base_dir)
+            print(f"[FIFO LOOP] Sucesso: {deleted_count} gravações antigas apagadas. Novo espaço livre: {new_free / (1024**3):.2f} GB.")
+    except Exception as e:
+        print(f"[FIFO LOOP] Erro na verificação de disco: {e}")
 
 def save_config(cfg):
     try:
@@ -92,9 +140,20 @@ def recorder_worker():
     base_dir = cfg["recordingsDirectory"]
     os.makedirs(base_dir, exist_ok=True)
     print(f"[NVR RECORDER] Destino das gravacoes: {base_dir}")
+    print(f"[NVR RECORDER] Prioridade de Re-gravação FIFO ativa: manter mínimo de {cfg.get('minFreeDiskGb', 5.0)} GB livres.")
     
+    loop_counter = 0
     while True:
         cfg = load_config()
+        base_dir = cfg.get("recordingsDirectory", "D:\\Gravacoes_CFTV")
+        min_free_gb = float(cfg.get("minFreeDiskGb", 5.0))
+
+        # A cada 30 segundos (6 ciclos de 5s), executa a verificação prioritária de espaço livre FIFO
+        loop_counter += 1
+        if loop_counter >= 6:
+            loop_counter = 0
+            purge_oldest_recordings_if_needed(base_dir, min_free_gb)
+
         if cfg.get("enabled", True):
             for cam in cfg["cameras"]:
                 cname = cam["name"]
@@ -102,7 +161,7 @@ def recorder_worker():
                 if proc is None or proc.poll() is not None:
                     try:
                         print(f"[NVR RECORDER] Conectando gravador na camera: {cname}...")
-                        active_recorders[cname] = start_camera_recording(cam, cfg["recordingsDirectory"], cfg.get("segmentMinutes", 15))
+                        active_recorders[cname] = start_camera_recording(cam, base_dir, cfg.get("segmentMinutes", 15))
                     except Exception as e:
                         print(f"[NVR RECORDER] Erro ao iniciar {cname}: {e}")
         time.sleep(5)
