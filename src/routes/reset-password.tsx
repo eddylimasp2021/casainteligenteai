@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/home/ui-states";
+import { AppFooter } from "@/components/common/AppFooter";
 
 export const Route = createFileRoute("/reset-password")({
   head: () => ({
@@ -36,15 +37,18 @@ function ResetPage() {
     navigate({ to: "/dashboard" });
   }
   return (
-    <main className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-md">
-        <Logo className="mb-8 justify-center" />
-        <form onSubmit={submit} className="glass grid gap-4 rounded-3xl p-8">
-          <h1 className="text-2xl font-semibold">Definir nova senha</h1>
-          <div className="grid gap-2"><Label htmlFor="np">Nova senha</Label><Input id="np" type="password" minLength={8} required value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="new-password" /></div>
-          <Button type="submit" disabled={busy}>Salvar senha</Button>
-        </form>
-      </div>
-    </main>
+    <div className="flex min-h-screen flex-col justify-between">
+      <main className="flex flex-1 items-center justify-center px-4 py-8">
+        <div className="w-full max-w-md">
+          <Logo className="mb-8 justify-center" />
+          <form onSubmit={submit} className="glass grid gap-4 rounded-3xl p-8">
+            <h1 className="text-2xl font-semibold">Definir nova senha</h1>
+            <div className="grid gap-2"><Label htmlFor="np">Nova senha</Label><Input id="np" type="password" minLength={8} required value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="new-password" /></div>
+            <Button type="submit" disabled={busy}>Salvar senha</Button>
+          </form>
+        </div>
+      </main>
+      <AppFooter />
+    </div>
   );
 }

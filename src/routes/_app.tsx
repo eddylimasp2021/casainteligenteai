@@ -39,6 +39,7 @@ import {
 import { useOnline } from "@/hooks/use-online";
 import { PwaInstallPrompt } from "@/components/home/PwaInstallPrompt";
 import { NotificationsBell } from "@/components/home/NotificationsBell";
+import { AppFooter } from "@/components/common/AppFooter";
 
 export const Route = createFileRoute("/_app")({ component: AppLayout });
 
@@ -126,7 +127,7 @@ function Shell() {
         </div>
       </aside>
 
-      <div className="min-w-0 flex-1 pb-24 md:pb-0">
+      <div className="min-w-0 flex-1 flex flex-col min-h-screen pb-24 md:pb-0">
         <header className="sticky top-0 z-30 flex items-center gap-3 border-b bg-background/70 px-4 py-3 backdrop-blur-xl sm:px-6">
           <Button
             variant="ghost"
@@ -203,13 +204,14 @@ function Shell() {
         <main
           className={
             pathname === "/dvr-nvr"
-              ? "w-full px-2 sm:px-4 lg:px-6 py-3"
-              : "mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8"
+              ? "w-full flex-1 px-2 sm:px-4 lg:px-6 py-3"
+              : "mx-auto w-full flex-1 max-w-7xl px-4 py-6 sm:px-6 lg:py-8"
           }
         >
           <Outlet />
           <PwaInstallPrompt />
         </main>
+        <AppFooter />
       </div>
 
       {/* Mobile bottom navigation */}
