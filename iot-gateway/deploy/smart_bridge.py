@@ -6,7 +6,11 @@ import socket
 import struct
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from socketserver import ThreadingMixIn
 from urllib.parse import urlparse, parse_qs
+
+class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+    daemon_threads = True
 
 # Configuration
 PORT = 1985
@@ -325,8 +329,8 @@ class SmartTvBridgeHandler(BaseHTTPRequestHandler):
         return
 
 def run_server():
-    server = HTTPServer(("0.0.0.0", PORT), SmartTvBridgeHandler)
-    print(f"[SmartTvBridge] Servidor HTTP de Controle e Failover rodando na porta {PORT}...")
+    server = ThreadedHTTPServer(("0.0.0.0", PORT), SmartTvBridgeHandler)
+    print(f"[SmartTvBridge] Servidor HTTP Multi-Thread de Controle e Failover rodando na porta {PORT}...")
     server.serve_forever()
 
 if __name__ == "__main__":

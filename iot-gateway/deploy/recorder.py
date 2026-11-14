@@ -6,7 +6,11 @@ import shutil
 import subprocess
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from socketserver import ThreadingMixIn
 from threading import Thread
+
+class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+    daemon_threads = True
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 BIN_DIR = os.path.join(BASE_DIR, "bin")
@@ -312,6 +316,9 @@ class ApiHandler(BaseHTTPRequestHandler):
                         f_path = os.path.join(sdir, f)
                         try:
                             stat = os.stat(f_path)
+                            # Ignore empty or corrupted stub files (< 100 KB)
+                            if stat.st_size < 100 * 1024:
+                                continue
                             # Filename format: Camera_Tripla_240_2026-11-12_15-00-02.mp4 or Garagem_Rua_2026-11-13_11-10-39.mp4
                             clean_stem = f.replace(".mp4", "").replace(".mkv", "")
                             parts = clean_stem.split("_")
@@ -496,7 +503,7 @@ class ApiHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
 def run_server():
-    server = HTTPServer(("0.0.0.0", 8089), ApiHandler)
+    server = ThreadedHTTPServer(("0.0.0.0", 8089), ApiHandler)
     server.serve_forever()
 
 if __name__ == "__main__":

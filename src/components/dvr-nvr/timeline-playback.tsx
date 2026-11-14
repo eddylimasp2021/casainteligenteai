@@ -71,23 +71,64 @@ export function TimelinePlayback({
   const [clipStart, setClipStart] = useState<number | null>(null);
   const [showSegmentList, setShowSegmentList] = useState<boolean>(false);
   const [zoomMode, setZoomMode] = useState<"24h" | "12h" | "6h">("24h");
-  // Default to true so all browser playback is instant & 100% compatible with H.264 / H.265
-  const [useCompatibilityMode, setUseCompatibilityMode] = useState<boolean>(true);
+  // Default to false (Direct MP4 with HTTP 206 Range Seeking); auto-fallback to transcode if codec is H.265
+  const [useCompatibilityMode, setUseCompatibilityMode] = useState<boolean>(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
 
+  const [workingBaseUrl, setWorkingBaseUrl] = useState<string>("");
+
   // Resolved gateway URL with fallback (Usa sempre a ponte de gravações ativa)
   const gatewayBase = useMemo(() => {
+    if (workingBaseUrl) return workingBaseUrl;
     if (propGatewayBase && propGatewayBase.startsWith("https://")) {
       return propGatewayBase.replace(/\/+$/, "");
     }
     const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
     if (isHttps) {
-      return "https://applications-county-lucy-annual.trycloudflare.com";
+      return "https://galaxy-partial-biography-polls.trycloudflare.com";
     }
     return "http://127.0.0.1:1985";
-  }, [propGatewayBase]);
+  }, [propGatewayBase, workingBaseUrl]);
+
+  // Discover dynamic gateway URL from /cftv_gateway.json or query param
+  const getDynamicEndpoints = async (): Promise<string[]> => {
+    const list: string[] = [];
+    if (typeof window !== "undefined") {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const gw = params.get("gateway");
+        if (gw && gw.trim()) list.push(decodeURIComponent(gw).trim().replace(/\/+$/, ""));
+      } catch {}
+    }
+    if (propGatewayBase) {
+      const cleanProp = propGatewayBase.trim().replace(/\/+$/, "");
+      if (cleanProp.includes("127.0.0.1:1984") || cleanProp.includes("localhost:1984")) {
+        list.push("http://127.0.0.1:1985", "http://127.0.0.1:8089");
+      }
+      list.push(cleanProp);
+    }
+    try {
+      const r = await fetch("/cftv_gateway.json?t=" + Date.now());
+      if (r.ok) {
+        const gj = await r.json();
+        const jUrl = (gj?.tunnel_url || gj?.gateway_url || "").trim().replace(/\/+$/, "");
+        if (jUrl && !list.includes(jUrl)) list.unshift(jUrl);
+      }
+    } catch {}
+    try {
+      const saved = localStorage.getItem("homepulse_dvr_gateway_url_v1");
+      if (saved && saved.trim() && !list.includes(saved.trim())) {
+        list.push(saved.trim().replace(/\/+$/, ""));
+      }
+    } catch {}
+    list.push("https://galaxy-partial-biography-polls.trycloudflare.com");
+    if (typeof window !== "undefined" && window.location.protocol !== "https:") {
+      list.push("http://127.0.0.1:1985", "http://127.0.0.1:8089", "http://192.168.0.117:1985", "http://192.168.0.117:8089");
+    }
+    return Array.from(new Set(list.filter(Boolean)));
+  };
 
   const activeCamera = useMemo(() => {
     return cameras.find((c) => c.id === selectedCameraId) || cameras[0]!;
@@ -117,26 +158,21 @@ export function TimelinePlayback({
 
   // 1. Fetch Available Dates for the active camera
   const fetchAvailableDates = async () => {
-    const endpointsToTry = [
-      gatewayBase,
-      "https://applications-county-lucy-annual.trycloudflare.com",
-    ];
-    if (typeof window !== "undefined" && window.location.protocol !== "https:") {
-      endpointsToTry.push("http://127.0.0.1:1985");
-      endpointsToTry.push("http://127.0.0.1:8089");
-    }
+    const endpointsToTry = await getDynamicEndpoints();
 
     for (const base of endpointsToTry) {
       if (!base) continue;
-      const targetUrl = `${base.replace(/\/+$/, "")}/api/recordings/dates?camera=${encodeURIComponent(streamKey)}`;
+      const cleanBase = base.replace(/\/+$/, "");
+      const targetUrl = `${cleanBase}/api/recordings/dates?camera=${encodeURIComponent(streamKey)}`;
       try {
         const ctrl = new AbortController();
-        const tid = setTimeout(() => ctrl.abort(), 4000);
+        const tid = setTimeout(() => ctrl.abort(), 4500);
         const res = await fetch(targetUrl, { signal: ctrl.signal });
         clearTimeout(tid);
         if (res.ok) {
           const data = await res.json();
           const dList: AvailableDate[] = data.dates || [];
+          setWorkingBaseUrl(cleanBase);
           setAvailableDates(dList);
           // If current selectedDate has no recordings and we found dates, auto-pick the latest one!
           if (dList.length > 0 && !dList.some((d) => d.date === selectedDate)) {
@@ -153,33 +189,27 @@ export function TimelinePlayback({
   // 2. Fetch Real Recordings from API
   const fetchRecordings = async () => {
     setIsLoading(true);
-    const endpointsToTry = [
-      gatewayBase,
-      "https://applications-county-lucy-annual.trycloudflare.com",
-    ];
-    if (typeof window !== "undefined" && window.location.protocol !== "https:") {
-      endpointsToTry.push("http://127.0.0.1:8089");
-      endpointsToTry.push("http://127.0.0.1:1985");
-      endpointsToTry.push("http://192.168.0.117:8089");
-    }
+    const endpointsToTry = await getDynamicEndpoints();
 
     let loaded = false;
     for (const base of endpointsToTry) {
       if (!base) continue;
-      const targetUrl = `${base.replace(/\/+$/, "")}/api/recordings?camera=${encodeURIComponent(streamKey)}&date=${selectedDate}`;
+      const cleanBase = base.replace(/\/+$/, "");
+      const targetUrl = `${cleanBase}/api/recordings?camera=${encodeURIComponent(streamKey)}&date=${selectedDate}`;
       try {
         const ctrl = new AbortController();
-        const tid = setTimeout(() => ctrl.abort(), 4000);
+        const tid = setTimeout(() => ctrl.abort(), 4500);
         const res = await fetch(targetUrl, { signal: ctrl.signal });
         clearTimeout(tid);
         if (res.ok) {
           const data = await res.json();
-          const list: RecordingSegment[] = data.recordings || [];
+          const list: RecordingSegment[] = (data.recordings || []).filter((r: RecordingSegment) => (r.sizeBytes || 0) > 100 * 1024);
+          setWorkingBaseUrl(cleanBase);
           setRecordings(list);
 
           if (list.length > 0) {
-            // Escolhe o último segmento estável gravado
-            const chosen = list[list.length - 1]!;
+            // Se houver mais de 1 bloco, escolhe o penúltimo (pois o último bloco pode estar sendo gravado neste exato segundo)
+            const chosen = list.length > 1 ? list[list.length - 2]! : list[list.length - 1]!;
             setActiveRecording(chosen);
             setCurrentMinute(chosen.startMinute);
           } else {
@@ -202,11 +232,11 @@ export function TimelinePlayback({
 
   useEffect(() => {
     fetchAvailableDates();
-  }, [streamKey, gatewayBase]);
+  }, [streamKey, propGatewayBase]);
 
   useEffect(() => {
     fetchRecordings();
-  }, [streamKey, selectedDate, gatewayBase]);
+  }, [streamKey, selectedDate, propGatewayBase]);
 
   // Sync playback speed to video element
   useEffect(() => {
@@ -507,6 +537,15 @@ export function TimelinePlayback({
 
             {/* Right OSD Controls */}
             <div className="absolute top-4 right-4 flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setUseCompatibilityMode(!useCompatibilityMode)}
+                className="h-7 px-2.5 rounded-lg bg-black/80 text-white hover:bg-black/90 border border-white/10 font-mono text-[10px]"
+                title="Alternar entre Modo Direto MP4 e Modo Transcodificado H.264"
+              >
+                {useCompatibilityMode ? "MODO: TRANSCODE H.264" : "MODO: DIRETO MP4"}
+              </Button>
               <Badge className="bg-black/80 text-emerald-400 border border-emerald-500/30 font-mono text-xs py-1 px-2.5 backdrop-blur-md">
                 VELOCIDADE: {playbackSpeed}x
               </Badge>

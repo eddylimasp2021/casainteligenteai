@@ -440,7 +440,7 @@ function DvrNvrPage() {
 
     // 3. Fallback inteligente: se for HTTPS (como lovable.app no celular), usar o túnel atual ativo
     const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
-    return isHttps ? "https://partial-quit-finally-win.trycloudflare.com" : "http://127.0.0.1:1984";
+    return isHttps ? "https://galaxy-partial-biography-polls.trycloudflare.com" : "http://127.0.0.1:1985";
   });
   const [isGatewayModalOpen, setIsGatewayModalOpen] = useState(false);
   const [tempGatewayUrl, setTempGatewayUrl] = useState(gatewayUrl);
@@ -595,7 +595,9 @@ function DvrNvrPage() {
       candidates.push(gatewayUrl);
     }
 
-    // Candidatos 5 e 6: IPs locais
+    // Candidatos 5 e 6: IPs locais (prioriza porta 1985 que unifica câmeras + gravações)
+    candidates.push("http://192.168.0.117:1985");
+    candidates.push("http://127.0.0.1:1985");
     candidates.push("http://192.168.0.117:1984");
     candidates.push("http://127.0.0.1:1984");
 
@@ -666,6 +668,22 @@ function DvrNvrPage() {
         return;
       }
     }
+
+    // Prioridade 0: Lê o túnel ativo sincronizado em /cftv_gateway.json
+    fetch("/cftv_gateway.json?t=" + Date.now())
+      .then((res) => (res.ok ? res.json() : null))
+      .then((gj) => {
+        const jsonUrl = (gj?.tunnel_url || gj?.gateway_url || "").trim().replace(/\/+$/, "");
+        if (jsonUrl && jsonUrl.startsWith("http")) {
+          setGatewayUrl(jsonUrl);
+          setTempGatewayUrl(jsonUrl);
+          setIsGatewayUnreachable(false);
+          try {
+            localStorage.setItem("homepulse_dvr_gateway_url_v1", jsonUrl);
+          } catch {}
+        }
+      })
+      .catch(() => {});
 
     // Se não veio ?gateway= na URL, busca do banco de dados na nuvem
     const targetHousehold = currentId || "casa-principal-master";

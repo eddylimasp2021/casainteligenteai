@@ -3,10 +3,13 @@ import time
 import re
 import os
 import sys
+import json
+from datetime import datetime
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_FILE = os.path.join(BASE_DIR, "tunnel.log")
 URL_FILE = os.path.join(BASE_DIR, "active_tunnel.txt")
+PUBLIC_JSON = os.path.abspath(os.path.join(BASE_DIR, "..", "..", "public", "cftv_gateway.json"))
 CF_EXE = os.path.join(BASE_DIR, "bin", "cloudflared.exe")
 
 def main():
@@ -31,6 +34,15 @@ def main():
                                 print(f"[SUPERVISOR] Túnel ativo detectado: {tunnel_url}")
                                 with open(URL_FILE, "w", encoding="utf-8") as uf:
                                     uf.write(tunnel_url)
+                                try:
+                                    with open(PUBLIC_JSON, "w", encoding="utf-8") as pf:
+                                        json.dump({
+                                            "gateway_url": tunnel_url,
+                                            "tunnel_url": tunnel_url,
+                                            "updated_at": datetime.now().isoformat()
+                                        }, pf, indent=2)
+                                except Exception as je:
+                                    print(f"[SUPERVISOR] Aviso ao gravar cftv_gateway.json: {je}")
                                 break
                     except:
                         pass
