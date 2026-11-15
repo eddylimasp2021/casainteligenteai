@@ -167,10 +167,31 @@ export function RealCameraPlayer({
   const animFrameRef = useRef<number | null>(null);
   const pingIntervalRef = useRef<number | null>(null);
   const frameTimeoutRef = useRef<number | null>(null);
+  const iceReconnectTimeoutRef = useRef<number | null>(null);
   const snapshotIntervalRef = useRef<number | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const recordIntervalRef = useRef<number | null>(null);
+  const connectAttemptIdRef = useRef<number>(0);
+  const retryCountRef = useRef<number>(0);
+  const isMountedRef = useRef<boolean>(true);
+  const isMutedRef = useRef<boolean>(isMuted);
+  const volumeRef = useRef<number>(volume);
+
+  useEffect(() => {
+    isMutedRef.current = isMuted;
+  }, [isMuted]);
+
+  useEffect(() => {
+    volumeRef.current = volume;
+  }, [volume]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // Stream identifier registered in go2rtc (robust resolution for multi-lens and IP addresses)
   const streamName = useMemo(() => {
@@ -188,6 +209,9 @@ export function RealCameraPlayer({
     }
     if (cleanIp === "192.168.0.198" || lowerName.includes("198") || rawId.includes("198")) {
       return "cam_192_168_0_198";
+    }
+    if (cleanIp === "192.168.0.149" || lowerName.includes("149") || lowerName.includes("yoosee") || rawId.includes("149")) {
+      return "cam_192_168_0_149";
     }
 
     // 2. If valid stream name was provided
@@ -275,15 +299,22 @@ export function RealCameraPlayer({
 
   // Cleanup helper
   const disconnectStream = useCallback(() => {
+    connectAttemptIdRef.current += 1;
+
     if (frameTimeoutRef.current) {
       clearTimeout(frameTimeoutRef.current);
       frameTimeoutRef.current = null;
+    }
+    if (iceReconnectTimeoutRef.current) {
+      clearTimeout(iceReconnectTimeoutRef.current);
+      iceReconnectTimeoutRef.current = null;
     }
     if (pingIntervalRef.current) {
       clearInterval(pingIntervalRef.current);
       pingIntervalRef.current = null;
     }
     if (snapshotIntervalRef.current) {
+      clearTimeout(snapshotIntervalRef.current);
       clearInterval(snapshotIntervalRef.current);
       snapshotIntervalRef.current = null;
     }
@@ -352,6 +383,9 @@ export function RealCameraPlayer({
   // Connect WebRTC stream via go2rtc with H.264 transcoder fallback and decoded frame verification
   const connectWebRTC = useCallback(async () => {
     disconnectStream();
+    const attemptId = connectAttemptIdRef.current;
+    const isStale = () => !isMountedRef.current || connectAttemptIdRef.current !== attemptId;
+
     setStreamState("connecting");
     setErrorMessage(null);
 
@@ -374,6 +408,7 @@ export function RealCameraPlayer({
 
       // 3. Attach incoming media tracks (both video & audio) to consolidated MediaStream
       pc.ontrack = (event) => {
+        if (isStale()) return;
         if (!mediaStreamRef.current) {
           mediaStreamRef.current = new MediaStream();
         }
@@ -389,8 +424,8 @@ export function RealCameraPlayer({
           if (videoRef.current.srcObject !== mediaStreamRef.current) {
             videoRef.current.srcObject = mediaStreamRef.current;
           }
-          videoRef.current.volume = volume;
-          videoRef.current.muted = isMuted;
+          videoRef.current.volume = volumeRef.current;
+          videoRef.current.muted = isMutedRef.current;
           videoRef.current.play().catch((playErr) => {
             console.warn("Autoplay policy retry with muted:", playErr);
             if (videoRef.current) {
@@ -402,14 +437,42 @@ export function RealCameraPlayer({
       };
 
       pc.oniceconnectionstatechange = () => {
-        if (pc.iceConnectionState === "failed" || pc.iceConnectionState === "disconnected") {
-          console.warn("ICE connection interrupted. Gracefully switching to continuous Snapshot mode.");
-          setProtocol("Snapshot");
+        if (isStale()) return;
+        if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
+          if (iceReconnectTimeoutRef.current) {
+            clearTimeout(iceReconnectTimeoutRef.current);
+            iceReconnectTimeoutRef.current = null;
+          }
+          return;
+        }
+        if (pc.iceConnectionState === "failed") {
+          console.warn(`WebRTC ICE failed on ${camera.name}, auto-reconnecting WebRTC...`);
+          if (iceReconnectTimeoutRef.current) clearTimeout(iceReconnectTimeoutRef.current);
+          iceReconnectTimeoutRef.current = window.setTimeout(() => {
+            if (!isStale()) connectWebRTC();
+          }, 1500);
+        } else if (pc.iceConnectionState === "disconnected") {
+          // Transient Wi-Fi/network blip: wait 6 seconds to see if ICE self-recovers before reconnecting
+          if (iceReconnectTimeoutRef.current) clearTimeout(iceReconnectTimeoutRef.current);
+          iceReconnectTimeoutRef.current = window.setTimeout(() => {
+            if (
+              !isStale() &&
+              peerConnectionRef.current === pc &&
+              (pc.iceConnectionState === "disconnected" || pc.iceConnectionState === "failed")
+            ) {
+              console.warn(`WebRTC ICE remained disconnected on ${camera.name}, auto-reconnecting...`);
+              connectWebRTC();
+            }
+          }, 6000);
         }
       };
 
       // 4. Create SDP Offer
       const offer = await pc.createOffer();
+      if (isStale()) {
+        pc.close();
+        return;
+      }
       await pc.setLocalDescription(offer);
 
       // 5. Wait for ICE gathering to complete so SDP contains complete candidates and ice-ufrag
@@ -424,14 +487,19 @@ export function RealCameraPlayer({
             }
           };
           pc.addEventListener("icegatheringstatechange", checkState);
-          setTimeout(resolve, 800); // Max 800ms timeout
+          setTimeout(resolve, 600); // Fast 600ms max ICE gather timeout
         }
       });
+
+      if (isStale()) {
+        pc.close();
+        return;
+      }
 
       setStreamState("negotiating");
       const offerSdp = pc.localDescription?.sdp || offer.sdp;
 
-      // Prefer H.264 transcoded stream for Chrome/Edge if source is H.265 or needs baseline compatibility
+      // Prefer H.264 transcoded stream for Chrome/Edge if source is H.265 or multi-lens
       const targetStream =
         streamName === "garagem_rua"
           ? "garagem_rua_h264"
@@ -463,25 +531,54 @@ export function RealCameraPlayer({
 
       // 6. Set SDP Answer
       const answerSdp = await response.text();
+      if (isStale()) {
+        pc.close();
+        return;
+      }
       await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
 
-      const handshakeDuration = Math.round(performance.now() - startTime);
-      setLatencyMs(Math.max(45, Math.min(120, handshakeDuration)));
+      if (isStale()) {
+        pc.close();
+        return;
+      }
 
-      // 7. Transition to awaiting_frames state — DO NOT declare victory until frames are decoded!
+      const handshakeDuration = Math.round(performance.now() - startTime);
+      setLatencyMs(Math.max(35, Math.min(110, handshakeDuration)));
+
+      // 7. Transition to awaiting_frames state until first video frame is decoded
       setStreamState("awaiting_frames");
 
-      // Verify that video frames actually decode within 2.5 seconds, else gracefully switch to Snapshot
+      // Give H.264/RTSP stream up to 10 seconds to deliver the first keyframe; if it doesn't, auto-retry WebRTC
       frameTimeoutRef.current = window.setTimeout(() => {
+        if (isStale()) return;
         const v = videoRef.current;
         if (v && (v.videoWidth === 0 || v.readyState < 2)) {
-          console.warn("WebRTC keyframe sync delay. Activating continuous Snapshot JPEG stream.");
-          setProtocol("Snapshot");
+          console.warn(`WebRTC keyframe timeout on ${camera.name}, retrying WebRTC handshake...`);
+          connectWebRTC();
         }
-      }, 2500);
+      }, 10000);
 
-      // 8. Track real latency periodically via RTCPeerConnection stats
+      // 8. Track real latency & watchdog for frozen video stream
+      let lastVideoTime = -1;
+      let stalledTicks = 0;
       pingIntervalRef.current = window.setInterval(async () => {
+        if (isStale()) return;
+        const v = videoRef.current;
+        if (v && v.videoWidth > 0 && !v.paused) {
+          if (v.currentTime === lastVideoTime) {
+            stalledTicks += 1;
+            if (stalledTicks >= 3) {
+              // Video froze for ~9 seconds -> auto-heal WebRTC connection
+              console.warn(`Stream stalled on ${camera.name}, auto-healing WebRTC...`);
+              stalledTicks = 0;
+              connectWebRTC();
+              return;
+            }
+          } else {
+            lastVideoTime = v.currentTime;
+            stalledTicks = 0;
+          }
+        }
         if (pc.connectionState === "connected") {
           try {
             const stats = await pc.getStats();
@@ -496,16 +593,19 @@ export function RealCameraPlayer({
         }
       }, 3000);
     } catch (err: unknown) {
-      console.warn("WebRTC connection failed, falling back to Snapshot mode:", err);
+      if (isStale()) return;
+      retryCountRef.current = Math.min(retryCountRef.current + 1, 4);
+      const backoffMs = Math.min(12000, 2500 * retryCountRef.current) + Math.round(Math.random() * 1200);
+      console.warn(`WebRTC connection failed on ${camera.name}, scheduling auto-retry in ${backoffMs}ms:`, err);
       disconnectStream();
-      setProtocol("Snapshot");
-      setStreamState("playing");
-      setRealCodec("JPEG (Ao Vivo)");
-      setLatencyMs(120);
+      setStreamState("connecting");
+      frameTimeoutRef.current = window.setTimeout(() => {
+        if (isMountedRef.current) connectWebRTC();
+      }, backoffMs);
     }
   }, [camera.name, disconnectStream, gatewayBase, streamName]);
 
-  // Connect Snapshot mode (Live JPEG stream directly from go2rtc frame capture)
+  // Connect Snapshot mode (Live JPEG stream directly from go2rtc frame capture, only when explicitly selected)
   const connectSnapshot = useCallback(() => {
     disconnectStream();
     setStreamState("connecting");
@@ -519,16 +619,18 @@ export function RealCameraPlayer({
     setLatencyMs(150);
   }, [disconnectStream]);
 
-  // Snapshot refresh interval in ms (fast 1000ms for fluid sub-second refresh)
-  useEffect(() => {
-    if (protocol !== "Snapshot" || streamState !== "playing") return;
-
-    const interval = setInterval(() => {
-      setSnapshotTimestamp(Date.now());
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [protocol, streamState]);
+  // Schedule next snapshot ONLY after the current frame loads/errors to guarantee max 1 in-flight request per tile
+  const scheduleNextSnapshot = useCallback(() => {
+    if (protocol !== "Snapshot" || !isMountedRef.current) return;
+    if (snapshotIntervalRef.current) {
+      clearTimeout(snapshotIntervalRef.current);
+    }
+    snapshotIntervalRef.current = window.setTimeout(() => {
+      if (isMountedRef.current) {
+        setSnapshotTimestamp(Date.now());
+      }
+    }, 1200);
+  }, [protocol]);
 
   // Connect HLS stream
   const connectHLS = useCallback(() => {
@@ -571,6 +673,7 @@ export function RealCameraPlayer({
 
     const handleFrameDecoded = () => {
       if (video.videoWidth > 0 && video.videoHeight > 0) {
+        retryCountRef.current = 0;
         if (frameTimeoutRef.current) {
           clearTimeout(frameTimeoutRef.current);
           frameTimeoutRef.current = null;
@@ -971,29 +1074,39 @@ export function RealCameraPlayer({
     >
       {/* 16:9 Display Area */}
       <div className="relative w-full h-full min-h-[160px] overflow-hidden bg-neutral-950 flex items-center justify-center">
-        {/* Instant Live Physical Camera Image (Always visible so user sees the camera image immediately from second 0) */}
-        <img
-          src={`${gatewayBase}/api/frame.jpeg?src=${encodeURIComponent(streamName)}&_t=${snapshotTimestamp}`}
-          alt={camera.name}
-          style={getMediaStyle()}
-          className="transition-all duration-300 pointer-events-none"
-          onLoad={() => {
-            snapshotFailuresRef.current = 0;
-            setHasImageLoaded(true);
-            setImageError(false);
-            if (realResolution === null) {
-              setRealResolution(totalLenses > 1 && activeLens > 0 ? "1920x1080 (HD)" : "1920x3240 (3 Lentes)");
-            }
-          }}
-          onError={() => {
-            snapshotFailuresRef.current += 1;
-            if (snapshotFailuresRef.current >= 3) {
-              setImageError(true);
-            }
-          }}
-        />
+        {/* Live Snapshot mode: only rendered when explicitly in Snapshot protocol to avoid piling up keyframe consumers in go2rtc */}
+        {protocol === "Snapshot" && (
+          <img
+            src={`${gatewayBase}/api/frame.jpeg?src=${encodeURIComponent(
+              streamName === "garagem_rua"
+                ? "garagem_rua_h264"
+                : streamName === "cam_192_168_0_240"
+                ? "cam_192_168_0_240_h264"
+                : streamName
+            )}&_t=${snapshotTimestamp}`}
+            alt={camera.name}
+            style={getMediaStyle()}
+            className="transition-all duration-300 pointer-events-none"
+            onLoad={() => {
+              snapshotFailuresRef.current = 0;
+              setHasImageLoaded(true);
+              setImageError(false);
+              if (realResolution === null) {
+                setRealResolution(totalLenses > 1 && activeLens > 0 ? "1920x1080 (HD)" : "1920x3240 (3 Lentes)");
+              }
+              scheduleNextSnapshot();
+            }}
+            onError={() => {
+              snapshotFailuresRef.current += 1;
+              if (snapshotFailuresRef.current >= 3) {
+                setImageError(true);
+              }
+              scheduleNextSnapshot();
+            }}
+          />
+        )}
 
-        {/* Real HTML5 Video element for WebRTC / HLS: Smoothly overlays the image as soon as 30 FPS video frames decode */}
+        {/* Real HTML5 Video element for WebRTC / HLS: Native 30 FPS low-latency stream */}
         {protocol !== "Snapshot" && (
           <video
             ref={videoRef}
@@ -1001,7 +1114,7 @@ export function RealCameraPlayer({
             playsInline
             muted={isMuted}
             style={getMediaStyle()}
-            className={`transition-opacity duration-500 z-10 ${
+            className={`transition-opacity duration-300 z-10 ${
               streamState === "playing" ? "opacity-100" : "opacity-0 pointer-events-none"
             }`}
           />
@@ -1043,11 +1156,15 @@ export function RealCameraPlayer({
           </div>
         )}
 
-        {/* Floating status pill when WebRTC is awaiting keyframes */}
-        {streamState === "awaiting_frames" && (
+        {/* Floating status pill when connecting/negotiating or awaiting WebRTC keyframes */}
+        {(streamState === "connecting" || streamState === "negotiating" || streamState === "awaiting_frames") && (
           <div className="absolute top-10 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/80 backdrop-blur-md border border-emerald-500/40 text-white text-[11px] shadow-lg animate-pulse pointer-events-none">
             <RefreshCw className="size-3 animate-spin text-emerald-400" />
-            <span>WebRTC conectado • Sincronizando vídeo fluido...</span>
+            <span>
+              {streamState === "awaiting_frames"
+                ? "WebRTC conectado • Sincronizando vídeo fluido..."
+                : "Conectando câmera em tempo real..."}
+            </span>
           </div>
         )}
 

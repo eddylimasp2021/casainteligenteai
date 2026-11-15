@@ -2,25 +2,30 @@
   "recordingsDirectory": "D:\\Gravacoes_CFTV",
   "segmentMinutes": 15,
   "enabled": true,
+  "minFreeDiskGb": 5.0,
   "cameras": [
     {
       "name": "garagem_rua",
-      "rtspUrl": "rtsp://admin:ambar786!@192.168.0.139:554/onvif1",
-      "codec": "transcode_h264"
+      "stream": "garagem_rua_h264",
+      "rtspUrl": "rtsp://127.0.0.1:8554/garagem_rua_h264",
+      "codec": "copy"
     },
     {
       "name": "Camera_Externa_198",
-      "rtspUrl": "rtsp://admin:ambar786@192.168.0.198:554/onvif1",
+      "stream": "cam_192_168_0_198",
+      "rtspUrl": "rtsp://127.0.0.1:8554/cam_192_168_0_198",
       "codec": "copy"
     },
     {
       "name": "Camera_Tripla_240",
-      "rtspUrl": "rtsp://admin:ambar786@@192.168.0.240:554/onvif1",
-      "codec": "transcode_h264"
+      "stream": "cam_192_168_0_240_h264",
+      "rtspUrl": "rtsp://127.0.0.1:8554/cam_192_168_0_240_h264",
+      "codec": "copy"
     },
     {
       "name": "Camera_Yoosee_149",
-      "rtspUrl": "rtsp://admin:ambar786!@192.168.0.149:554/onvif1",
+      "stream": "cam_192_168_0_149",
+      "rtspUrl": "rtsp://127.0.0.1:8554/cam_192_168_0_149",
       "codec": "copy"
     }
   ]

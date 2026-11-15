@@ -109,6 +109,7 @@ def start_camera_recording(cam, base_dir, seg_minutes):
     cmd = [
         FFMPEG_EXE,
         "-y",
+        "-rtsp_transport", "tcp",
         "-i", rtsp_url,
     ]
     if codec_mode == "transcode_h264":

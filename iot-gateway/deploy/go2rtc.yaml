@@ -9,7 +9,7 @@ api:
   origin: "*"
   base_path: ""
 
-# 2. Servidor RTSP local para retransmissão
+# 2. Servidor RTSP local para retransmissão (Conexão única física por câmera)
 rtsp:
   listen: ":8554"
 
@@ -28,32 +28,36 @@ webrtc:
 # 4. Transcoder FFmpeg com baixa latência e baseline para navegadores
 ffmpeg:
   bin: "D:\\DEV-Apps\\casainteligenteai\\iot-gateway\\deploy\\bin\\ffmpeg.exe"
-  h264: "-c:v libx264 -preset ultrafast -tune zerolatency -profile:v baseline -level 3.0 -pix_fmt yuv420p -g 15"
+  h264: "-c:v libx264 -preset ultrafast -tune zerolatency -profile:v baseline -level 4.0 -pix_fmt yuv420p -g 15"
 
 # 5. Configuração de Streams (Câmeras IP Registradas)
 streams:
-  # Câmera Garagem Rua (Stream Original RTSP)
+  # Câmera Garagem Rua (192.168.0.139 - HEVC Original + H.264 WebRTC)
   garagem_rua:
     - rtsp://admin:ambar786!@192.168.0.139:554/onvif1
+  garagem_rua_h264:
+    - ffmpeg:rtsp://127.0.0.1:8554/garagem_rua#video=h264#audio=copy
 
-  # Câmera 192.168.0.198 (Stream Original RTSP)
+  # Câmera Externa 198 (192.168.0.198 - H.264 Nativa + Fallback H.264)
   cam_192_168_0_198:
     - rtsp://admin:ambar786@192.168.0.198:554/onvif1
+  cam_192_168_0_198_h264:
+    - ffmpeg:rtsp://127.0.0.1:8554/cam_192_168_0_198#video=h264#audio=copy
 
-  # Câmera 192.168.0.240 (Câmera Tripla Multi-Lente 3 em 1 - 1920x3240 Full HD)
+  # Câmera Tripla Multi-Lente 3 em 1 (192.168.0.240 - HEVC 1920x3240 + H.264 WebRTC)
   cam_192_168_0_240:
     - rtsp://admin:ambar786@@192.168.0.240:554/onvif1
+  cam_192_168_0_240_h264:
+    - ffmpeg:rtsp://127.0.0.1:8554/cam_192_168_0_240#video=h264#audio=copy
 
-  # Câmera 192.168.0.149 (Yoosee RTSP Direto)
+  # Câmera Yoosee 149 (192.168.0.149 - RTSP Direto + Fallback H.264)
   cam_192_168_0_149:
     - rtsp://admin:ambar786!@192.168.0.149:554/onvif2
     - rtsp://admin:ambar786!@192.168.0.149:554/onvif1
-  replay_stream:
-    - ffmpeg:D:\Gravacoes_CFTV\Camera_Tripla_240\Camera_Tripla_240_2026-11-13_11-24-00.mp4#video=h264
-  hls_vod_test:
-    - ffmpeg:D:\Gravacoes_CFTV\Camera_Tripla_240\Camera_Tripla_240_2026-11-13_11-24-00.mp4#video=h264
+  cam_192_168_0_149_h264:
+    - ffmpeg:rtsp://127.0.0.1:8554/cam_192_168_0_149#video=h264#audio=copy
 
-# 6. Configuração de Logs com Rotação
+# 6. Configuração de Logs
 log:
   level: "info"
   format: "text"

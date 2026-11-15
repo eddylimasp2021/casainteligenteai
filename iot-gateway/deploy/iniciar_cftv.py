@@ -19,11 +19,16 @@ print("=" * 75)
 print("  HOMEPULSE AI - GATEWAY CFTV, GRAVADOR NVR & PONTE IOT/TV (1-CLIQUE)")
 print("=" * 75)
 
-# 1. Kill old processes
+# 1. Kill old processes (including stale python workers)
 print("\n[1/6] Finalizando instâncias anteriores...")
 subprocess.run(["taskkill", "/F", "/IM", "go2rtc.exe"], capture_output=True)
 subprocess.run(["taskkill", "/F", "/IM", "cloudflared.exe"], capture_output=True)
 subprocess.run(["taskkill", "/F", "/IM", "ffmpeg.exe"], capture_output=True)
+subprocess.run(
+    ["powershell", "-NoProfile", "-Command",
+     "Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | Where-Object { $_.ProcessId -ne $PID -and ($_.CommandLine -match 'recorder\\.py|smart_bridge\\.py|tunnel_supervisor\\.py') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"],
+    capture_output=True
+)
 time.sleep(1)
 
 # 2. Check binaries
@@ -49,10 +54,10 @@ print("[5/6] Iniciando Gravador Físico NVR (MP4 contínuo no disco)...")
 recorder_proc = subprocess.Popen([sys.executable, RECORDER_PY], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 time.sleep(1)
 
-# 6. Start cloudflared and read stderr
+# 6. Start cloudflared targeting SmartBridge (1985 -> proxies both go2rtc 1984 and NVR recorder 8089)
 print("[6/6] Conectando Túnel Seguro Cloudflare HTTPS (Aguarde ~7 segundos)...")
 cf_proc = subprocess.Popen(
-    [CLOUDFLARED_EXE, "tunnel", "--url", "http://127.0.0.1:1984"],
+    [CLOUDFLARED_EXE, "tunnel", "--url", "http://127.0.0.1:1985"],
     stderr=subprocess.PIPE,
     stdout=subprocess.DEVNULL,
     text=True,
@@ -96,10 +101,21 @@ if tunnel_url:
     print(f"\n [NUVEM] Abrindo aplicação e sincronizando link com seus celulares: {app_url}")
     webbrowser.open(app_url)
     
-    # Salva também um arquivo de status com o link ativo atual
+    # Salva também os arquivos de status com o link ativo atual
     try:
+        import json
+        from datetime import datetime
         with open(os.path.join(DEPLOY_DIR, "gateway_url_ativa.txt"), "w", encoding="utf-8") as f:
             f.write(tunnel_url.strip())
+        with open(os.path.join(DEPLOY_DIR, "active_tunnel.txt"), "w", encoding="utf-8") as f:
+            f.write(tunnel_url.strip())
+        public_json = os.path.join(ROOT_DIR, "public", "cftv_gateway.json")
+        with open(public_json, "w", encoding="utf-8") as pf:
+            json.dump({
+                "gateway_url": tunnel_url.strip(),
+                "tunnel_url": tunnel_url.strip(),
+                "updated_at": datetime.now().isoformat()
+            }, pf, indent=2)
     except:
         pass
 else:
