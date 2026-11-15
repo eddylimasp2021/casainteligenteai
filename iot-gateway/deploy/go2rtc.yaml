@@ -28,7 +28,7 @@ webrtc:
 # 4. Transcoder FFmpeg com baixa latência e baseline para navegadores
 ffmpeg:
   bin: "D:\\DEV-Apps\\casainteligenteai\\iot-gateway\\deploy\\bin\\ffmpeg.exe"
-  h264: "-c:v libx264 -preset ultrafast -tune zerolatency -profile:v baseline -level 4.0 -pix_fmt yuv420p -g 15"
+  h264: "-c:v libx264 -preset ultrafast -tune zerolatency -profile:v baseline -level 4.0 -pix_fmt yuv420p -g 15 -crf 27 -maxrate 2200k -bufsize 2200k"
 
 # 5. Configuração de Streams (Câmeras IP Registradas)
 streams:
@@ -44,11 +44,11 @@ streams:
   cam_192_168_0_198_h264:
     - ffmpeg:rtsp://127.0.0.1:8554/cam_192_168_0_198#video=h264#audio=copy
 
-  # Câmera Tripla Multi-Lente 3 em 1 (192.168.0.240 - HEVC 1920x3240 + H.264 WebRTC)
+  # Câmera Tripla Multi-Lente 3 em 1 (192.168.0.240 - HEVC 1920x3240 + H.264 960x1620 Level 4.0 @ 1.4 Mbps p/ WebRTC instantâneo)
   cam_192_168_0_240:
     - rtsp://admin:ambar786@@192.168.0.240:554/onvif1
   cam_192_168_0_240_h264:
-    - ffmpeg:rtsp://127.0.0.1:8554/cam_192_168_0_240#video=h264#audio=copy
+    - exec:D:\DEV-Apps\casainteligenteai\iot-gateway\deploy\bin\ffmpeg.exe -hide_banner -v error -allowed_media_types video+audio -fflags nobuffer -flags low_delay -timeout 5000000 -user_agent go2rtc/ffmpeg -rtsp_flags prefer_tcp -i rtsp://127.0.0.1:8554/cam_192_168_0_240 -vf scale=960:1620 -r 15 -c:v libx264 -preset ultrafast -tune zerolatency -profile:v baseline -level 4.0 -pix_fmt yuv420p -g 15 -b:v 1400k -maxrate 1800k -bufsize 1400k -c:a copy -user_agent ffmpeg/go2rtc -rtsp_transport tcp -f rtsp {output}
 
   # Câmera Yoosee 149 (192.168.0.149 - RTSP Direto + Fallback H.264)
   cam_192_168_0_149:
