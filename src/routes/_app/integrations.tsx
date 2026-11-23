@@ -29,7 +29,7 @@ export const Route = createFileRoute("/_app/integrations")({
 });
 
 interface IntegrationCardDef {
-  key: "mqtt" | "home_assistant" | "zigbee2mqtt" | "matter" | "esp32" | "gemini_ai";
+  key: "mqtt" | "home_assistant" | "zigbee2mqtt" | "tuya" | "matter" | "esp32" | "gemini_ai";
   name: string;
   category: string;
   icon: typeof Radio | typeof Sparkles;
@@ -59,6 +59,16 @@ const INTEGRATION_DEFS: IntegrationCardDef[] = [
     description: "Integração bidirecional com entidades, sensores e automações do Home Assistant.",
     defaultPort: 8123,
     setupGuide: "Gere um Long-Lived Access Token no seu perfil do Home Assistant e configure a URL base no Gateway.",
+  },
+  {
+    key: "tuya",
+    name: "Tuya / Smart Life",
+    category: "Ecossistema Smart Life / IoT",
+    icon: Zap,
+    protocol: "Tuya Cloud OpenAPI & Local LAN",
+    description: "Controle lâmpadas, tomadas, interruptores e dispositivos Wi-Fi do ecossistema Tuya e Smart Life.",
+    defaultPort: 6668,
+    setupGuide: "Crie um projeto no Tuya IoT Platform (iot.tuya.com), obtenha o Client ID e Client Secret e conecte via Cloud ou Local Key.",
   },
   {
     key: "zigbee2mqtt",
@@ -197,18 +207,20 @@ function IntegrationsPage() {
               ? (deviceCounts?.["mqtt"] ?? 0)
               : def.key === "home_assistant"
                 ? (deviceCounts?.["home_assistant"] ?? 0)
-                : def.key === "zigbee2mqtt"
-                  ? (deviceCounts?.["zigbee"] ?? 0)
-                  : def.key === "matter"
-                    ? (deviceCounts?.["matter"] ?? 0)
-                    : def.key === "gemini_ai"
-                      ? (deviceCounts?.["total"] ?? Object.values(deviceCounts || {}).reduce((a, b) => a + b, 0))
-                      : (deviceCounts?.["wifi"] ?? 0);
+                : def.key === "tuya"
+                  ? (deviceCounts?.["tuya"] ?? 0)
+                  : def.key === "zigbee2mqtt"
+                    ? (deviceCounts?.["zigbee"] ?? 0)
+                    : def.key === "matter"
+                      ? (deviceCounts?.["matter"] ?? 0)
+                      : def.key === "gemini_ai"
+                        ? (deviceCounts?.["total"] ?? Object.values(deviceCounts || {}).reduce((a, b) => a + b, 0))
+                        : (deviceCounts?.["wifi"] ?? 0);
 
           const isConnected =
             def.key === "gemini_ai"
               ? Boolean(aiConfig.keys[aiConfig.activeProvider]?.trim()) || !AI_PROVIDERS[aiConfig.activeProvider].keyRequired
-              : dbRecord?.status === "connected" || (def.key === "mqtt" && devCount > 0);
+              : dbRecord?.status === "connected" || ((def.key === "mqtt" || def.key === "tuya") && devCount > 0);
           const isTesting = testingKey === def.key;
 
           return (
@@ -335,8 +347,113 @@ function IntegrationsPage() {
                 {selectedConfig.setupGuide}
               </div>
 
-              <div className="rounded-xl border p-3 text-xs space-y-2">
-                <div className="flex justify-between font-mono text-muted-foreground">
+              {/* Inputs de Configuração Rápida Direta no App */}
+              <div className="space-y-3 rounded-xl border p-3 text-xs bg-card/40">
+                <span className="font-semibold text-foreground block">Parâmetros Rápidos de Acesso:</span>
+                
+                {selectedConfig.key === "tuya" && (
+                  <div className="space-y-2">
+                    <div>
+                      <label className="text-muted-foreground block text-[11px] mb-1">Tuya Client ID / Access ID:</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: 8x92nd... (iot.tuya.com)"
+                        defaultValue={typeof window !== "undefined" ? localStorage.getItem("homepulse_tuya_client_id") || "" : ""}
+                        onChange={(e) => localStorage.setItem("homepulse_tuya_client_id", e.target.value.trim())}
+                        className="w-full h-8 rounded-md border border-input bg-background px-2.5 font-mono text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-muted-foreground block text-[11px] mb-1">Tuya Client Secret / Access Secret:</label>
+                      <input
+                        type="password"
+                        placeholder="••••••••••••••••"
+                        defaultValue={typeof window !== "undefined" ? localStorage.getItem("homepulse_tuya_client_secret") || "" : ""}
+                        onChange={(e) => localStorage.setItem("homepulse_tuya_client_secret", e.target.value.trim())}
+                        className="w-full h-8 rounded-md border border-input bg-background px-2.5 font-mono text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-muted-foreground block text-[11px] mb-1">Região do Datacenter (Tuya Cloud):</label>
+                      <select
+                        defaultValue={typeof window !== "undefined" ? localStorage.getItem("homepulse_tuya_region") || "us" : "us"}
+                        onChange={(e) => localStorage.setItem("homepulse_tuya_region", e.target.value)}
+                        className="w-full h-8 rounded-md border border-input bg-background px-2 font-mono text-xs"
+                      >
+                        <option value="us">América Ocidental (us / Estados Unidos)</option>
+                        <option value="eu">Europa Central (eu / Frankfurt)</option>
+                        <option value="cn">China (cn / Hangzhou)</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {selectedConfig.key === "mqtt" && (
+                  <div className="space-y-2">
+                    <div>
+                      <label className="text-muted-foreground block text-[11px] mb-1">Endereço do Broker MQTT (Host:Porta):</label>
+                      <input
+                        type="text"
+                        placeholder="mqtt://127.0.0.1:1883 ou ws://127.0.0.1:9001"
+                        defaultValue={typeof window !== "undefined" ? localStorage.getItem("homepulse_mqtt_broker_url") || "mqtt://127.0.0.1:1883" : "mqtt://127.0.0.1:1883"}
+                        onChange={(e) => localStorage.setItem("homepulse_mqtt_broker_url", e.target.value.trim())}
+                        className="w-full h-8 rounded-md border border-input bg-background px-2.5 font-mono text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-muted-foreground block text-[11px] mb-1">Tópico Raiz (Base Topic):</label>
+                      <input
+                        type="text"
+                        placeholder="casainteligente/#"
+                        defaultValue={typeof window !== "undefined" ? localStorage.getItem("homepulse_mqtt_base_topic") || "casainteligente/#" : "casainteligente/#"}
+                        onChange={(e) => localStorage.setItem("homepulse_mqtt_base_topic", e.target.value.trim())}
+                        className="w-full h-8 rounded-md border border-input bg-background px-2.5 font-mono text-xs"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {selectedConfig.key === "home_assistant" && (
+                  <div className="space-y-2">
+                    <div>
+                      <label className="text-muted-foreground block text-[11px] mb-1">URL do Home Assistant:</label>
+                      <input
+                        type="text"
+                        placeholder="http://homeassistant.local:8123 ou http://192.168.0.x:8123"
+                        defaultValue={typeof window !== "undefined" ? localStorage.getItem("homepulse_ha_url") || "http://homeassistant.local:8123" : "http://homeassistant.local:8123"}
+                        onChange={(e) => localStorage.setItem("homepulse_ha_url", e.target.value.trim())}
+                        className="w-full h-8 rounded-md border border-input bg-background px-2.5 font-mono text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-muted-foreground block text-[11px] mb-1">Long-Lived Access Token:</label>
+                      <input
+                        type="password"
+                        placeholder="Token gerado no perfil do Home Assistant"
+                        defaultValue={typeof window !== "undefined" ? localStorage.getItem("homepulse_ha_token") || "" : ""}
+                        onChange={(e) => localStorage.setItem("homepulse_ha_token", e.target.value.trim())}
+                        className="w-full h-8 rounded-md border border-input bg-background px-2.5 font-mono text-xs"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {selectedConfig.key === "zigbee2mqtt" && (
+                  <div className="space-y-2">
+                    <div>
+                      <label className="text-muted-foreground block text-[11px] mb-1">Tópico Base Zigbee2MQTT:</label>
+                      <input
+                        type="text"
+                        placeholder="zigbee2mqtt"
+                        defaultValue={typeof window !== "undefined" ? localStorage.getItem("homepulse_z2m_topic") || "zigbee2mqtt" : "zigbee2mqtt"}
+                        onChange={(e) => localStorage.setItem("homepulse_z2m_topic", e.target.value.trim())}
+                        className="w-full h-8 rounded-md border border-input bg-background px-2.5 font-mono text-xs"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-between font-mono text-muted-foreground pt-1 border-t border-border/40">
                   <span>Variável de Ambiente:</span>
                   <span className="text-foreground">{selectedConfig.key.toUpperCase()}_URL</span>
                 </div>
@@ -346,10 +463,23 @@ function IntegrationsPage() {
                 </div>
               </div>
 
+              <div className="flex gap-2 pt-2">
+                <Button
+                  size="sm"
+                  className="w-full gap-1.5"
+                  onClick={() => {
+                    toast.success(`✓ Parâmetros de ${selectedConfig.name} salvos com sucesso!`);
+                    setSelectedConfig(null);
+                  }}
+                >
+                  <CheckCircle2 className="size-4" /> Salvar Configurações
+                </Button>
+              </div>
+
               <p className="text-xs text-muted-foreground">
-                Por motivos de segurança e isolamento, credenciais de acesso local são configuradas no arquivo{" "}
-                <code className="rounded bg-muted px-1.5 py-0.5 text-foreground font-mono">iot-gateway/.env</code> no
-                servidor/mini-PC onde o gateway está executando, nunca trafegando diretamente pelo navegador.
+                As credenciais salvas aqui são comunicadas ao motor local do aplicativo e ao{" "}
+                <code className="rounded bg-muted px-1.5 py-0.5 text-foreground font-mono">iot-gateway</code> para
+                descoberta automática de nós e controle de dispositivos.
               </p>
             </div>
           </DialogContent>

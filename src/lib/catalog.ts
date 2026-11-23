@@ -68,9 +68,9 @@ export const CATEGORIES: Record<string, { label: string; icon: LucideIcon; types
   outros: { label: "Outros", icon: Box, types: { personalizado: { label: "Personalizado", caps: ["onoff"] } } },
 };
 
-export const PROTOCOLS = ["wifi", "mqtt", "matter", "zigbee", "zwave", "bluetooth", "http", "websocket", "home_assistant"] as const;
+export const PROTOCOLS = ["wifi", "mqtt", "matter", "zigbee", "tuya", "zwave", "bluetooth", "http", "websocket", "home_assistant"] as const;
 export const PROTOCOL_LABEL: Record<string, string> = {
-  wifi: "Wi-Fi", mqtt: "MQTT", matter: "Matter", zigbee: "Zigbee", zwave: "Z-Wave",
+  wifi: "Wi-Fi", mqtt: "MQTT", matter: "Matter", zigbee: "Zigbee", tuya: "Tuya / Smart Life", zwave: "Z-Wave",
   bluetooth: "Bluetooth", http: "HTTP/REST", websocket: "WebSocket", home_assistant: "Home Assistant",
 };
 
