@@ -786,6 +786,30 @@ function DvrNvrPage() {
     return false;
   });
 
+  // Modo de Enquadramento no Modo Padrão: "viewport" (Opção 1: Adaptável à altura do Monitor sem rolagem) vs "aspect" (Opção 2: Grade 16:9 clássica)
+  const [fitMode, setFitMode] = useState<"viewport" | "aspect">(() => {
+    try {
+      const saved = localStorage.getItem("homepulse_dvr_fit_mode_v1");
+      if (saved === "viewport" || saved === "aspect") return saved;
+    } catch {}
+    return "viewport"; // Opção 1 como padrão preferencial do usuário
+  });
+
+  const toggleFitMode = () => {
+    setFitMode((prev) => {
+      const next = prev === "viewport" ? "aspect" : "viewport";
+      try {
+        localStorage.setItem("homepulse_dvr_fit_mode_v1", next);
+      } catch {}
+      toast.info(
+        next === "viewport"
+          ? "Modo Adaptável ao Monitor ativado (quadros preenchem a tela sem rolagem)."
+          : "Modo Grade 16:9 clássico ativado."
+      );
+      return next;
+    });
+  };
+
   const toggleProfessionalView = () => {
     setIsProfessionalView((prev) => {
       const next = !prev;
@@ -1563,6 +1587,33 @@ function DvrNvrPage() {
                 </Button>
               </div>
 
+              {/* Modo de Ajuste à Tela: Adaptável ao Monitor vs Grade 16:9 (Visível fora do DVR Profissional) */}
+              {!isProfessionalView && (
+                <Button
+                  variant={fitMode === "viewport" ? "secondary" : "outline"}
+                  size="sm"
+                  onClick={toggleFitMode}
+                  className={`h-7 px-2.5 text-xs font-semibold gap-1.5 transition-all ${
+                    fitMode === "viewport"
+                      ? "border-sky-500/40 bg-sky-500/15 text-sky-400 hover:bg-sky-500/25"
+                      : "border-border/60 bg-card/60 text-muted-foreground hover:text-foreground"
+                  }`}
+                  title={
+                    fitMode === "viewport"
+                      ? "Ativo: Adaptável ao Monitor (altura 100% visível na tela sem rolar). Clique para mudar para Grade 16:9 clássica."
+                      : "Ativo: Grade 16:9 Clássica. Clique para mudar para Adaptável ao Monitor (preencher a tela)."
+                  }
+                >
+                  <Maximize2 className="size-3.5" />
+                  <span className="hidden sm:inline">
+                    {fitMode === "viewport" ? "Adaptar Monitor" : "Grade 16:9"}
+                  </span>
+                  <span className="sm:hidden">
+                    {fitMode === "viewport" ? "Adaptar" : "16:9"}
+                  </span>
+                </Button>
+              )}
+
               {/* Modo DVR Profissional (Ocultar Barras e Maximizar Quadros) */}
               <Button
                 variant={isProfessionalView ? "secondary" : "outline"}
@@ -1780,7 +1831,17 @@ function DvrNvrPage() {
                     : gridMode === "3x3"
                     ? "grid grid-cols-3 grid-rows-3 w-full h-[calc(100vh-20px)] gap-1 p-1"
                     : "grid grid-cols-3 grid-rows-2 w-full h-[calc(100vh-20px)] gap-1 p-1"
-                  : gridMode === "1x1"
+                  : fitMode === "viewport"
+                  ? /* Opção 1: Adaptável ao Monitor (100% visível na tela sem rolar para baixo) */
+                    gridMode === "1x1"
+                    ? "grid grid-cols-1 w-full h-[calc(100vh-220px)] min-h-[480px] gap-2 p-1 max-w-6xl mx-auto"
+                    : gridMode === "2x2"
+                    ? "grid grid-cols-1 md:grid-cols-2 grid-rows-2 w-full h-[calc(100vh-220px)] min-h-[480px] gap-2.5 p-1"
+                    : gridMode === "3x3"
+                    ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 grid-rows-3 w-full h-[calc(100vh-220px)] min-h-[560px] gap-2 p-1"
+                    : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 lg:grid-rows-2 w-full h-[calc(100vh-220px)] min-h-[500px] gap-2.5 p-1"
+                  : /* Opção 2: Grade Clássica 16:9 */
+                    gridMode === "1x1"
                   ? "grid grid-cols-1 w-full max-w-6xl mx-auto gap-3"
                   : gridMode === "2x2"
                   ? "grid grid-cols-1 md:grid-cols-2 gap-3 xl:gap-4"
@@ -1802,7 +1863,7 @@ function DvrNvrPage() {
                       onDragEnd={handleDragEnd}
                       onDrop={() => handleDrop(index)}
                       className={`relative w-full ${
-                        isProfessionalView ? "h-full rounded-md" : "aspect-video rounded-xl"
+                        isProfessionalView || fitMode === "viewport" ? "h-full min-h-0 rounded-md" : "aspect-video rounded-xl"
                       } bg-black/95 border border-neutral-800/80 shadow-md flex flex-col justify-between p-3 overflow-hidden select-none transition-all duration-200 cursor-grab active:cursor-grabbing group ${
                         draggedIndex === index ? "opacity-30 scale-[0.98]" : ""
                       } ${
@@ -1872,7 +1933,7 @@ function DvrNvrPage() {
                     onDragEnd={handleDragEnd}
                     onDrop={() => handleDrop(index)}
                     className={`relative group transition-all duration-200 w-full ${
-                      isProfessionalView ? "h-full rounded-md" : "aspect-video rounded-xl"
+                      isProfessionalView || fitMode === "viewport" ? "h-full min-h-0 rounded-md" : "aspect-video rounded-xl"
                     } ${
                       draggedIndex === index ? "opacity-30 scale-[0.98]" : ""
                     } ${
