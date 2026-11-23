@@ -20,14 +20,23 @@ export interface AutomationTrigger {
   /** ID do dispositivo sensor se o gatilho for baseado em evento */
   sensorDeviceId?: string;
   sensorDeviceName?: string;
-  /** Tipo de evento do sensor */
+  /** Tipo de evento do sensor ou câmera */
   sensorCondition?:
     | "motion_detected"
     | "presence_detected"
     | "opened"
     | "closed"
     | "temp_above"
-    | "temp_below";
+    | "temp_below"
+    | "camera_motion"
+    | "face_recognized"
+    | "unknown_face_detected"
+    | "line_crossing";
+  /** ID da câmera e nome para automações de vigilância por IA */
+  cameraId?: string;
+  cameraName?: string;
+  /** Nome ou identificador da pessoa reconhecida via Face ID */
+  personName?: string;
   thresholdValue?: number;
   description: string;
 }

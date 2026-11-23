@@ -30,8 +30,9 @@ import {
 import { saveSingleAutomation } from "@/lib/ai-automations";
 import { getStoredScenes } from "@/lib/scenes";
 import { toast } from "sonner";
-import { Clock, Radio, Check, Plus, Trash2, Sliders } from "lucide-react";
+import { Clock, Radio, Check, Plus, Trash2, Sliders, Cctv, ShieldAlert, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { INITIAL_CAMERAS, type IpCamera } from "@/types/dvr-nvr";
 
 interface ManualAutomationDialogProps {
   open: boolean;
@@ -63,7 +64,7 @@ export function ManualAutomationDialog({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<AutomationCategory>("conforto");
-  const [triggerType, setTriggerType] = useState<"time" | "sensor">("time");
+  const [triggerType, setTriggerType] = useState<"time" | "sensor" | "camera_event">("time");
 
   // Gatilho de Horário
   const [triggerTime, setTriggerTime] = useState("22:00");
@@ -75,6 +76,30 @@ export function ManualAutomationDialog({
     "motion_detected" | "presence_detected" | "opened" | "closed" | "temp_above"
   >("motion_detected");
   const [thresholdTemp, setThresholdTemp] = useState(25);
+
+  // Gatilho de Câmera / CFTV & Face ID
+  const [cameraId, setCameraId] = useState(() => {
+    try {
+      const saved = localStorage.getItem("homepulse_dvr_cameras_v1");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.length > 0) return parsed[0].id;
+      }
+    } catch {}
+    return INITIAL_CAMERAS[0]?.id || "cam-real-01";
+  });
+  const [cameraEvent, setCameraEvent] = useState<
+    "camera_motion" | "face_recognized" | "unknown_face_detected" | "line_crossing"
+  >("camera_motion");
+  const [targetPersonName, setTargetPersonName] = useState("");
+
+  const dvrCameras: IpCamera[] = (() => {
+    try {
+      const saved = localStorage.getItem("homepulse_dvr_cameras_v1");
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return INITIAL_CAMERAS;
+  })();
 
   // Ações nos dispositivos
   const [actions, setActions] = useState<AutomationAction[]>([]);
@@ -153,6 +178,22 @@ export function ManualAutomationDialog({
         time: triggerTime,
         daysOfWeek: selectedDays.length === 7 ? [] : selectedDays,
         description: `Todos os dias às ${triggerTime}`,
+      };
+    } else if (triggerType === "camera_event") {
+      const cam = dvrCameras.find((c) => c.id === cameraId) || dvrCameras[0];
+      const eventLabels: Record<string, string> = {
+        camera_motion: "Movimento em frente à câmera",
+        face_recognized: targetPersonName ? `Morador reconhecido (${targetPersonName})` : "Rosto conhecido reconhecido",
+        unknown_face_detected: "Pessoa não autorizada ou desconhecida detectada",
+        line_crossing: "Cruzamento de linha virtual / perímetro",
+      };
+      trigger = {
+        type: "camera_event",
+        cameraId: cam?.id || "cam-01",
+        cameraName: cam?.name || "Câmera CFTV",
+        sensorCondition: cameraEvent,
+        personName: targetPersonName.trim() || undefined,
+        description: `${eventLabels[cameraEvent] || "Evento IA"} na câmera "${cam?.name || "CFTV"}"`,
       };
     } else {
       const dev = devices.find((d) => d.id === sensorId);
@@ -269,7 +310,20 @@ export function ManualAutomationDialog({
                         : "text-muted-foreground hover:text-foreground"
                     )}
                   >
-                    Sensor / Evento
+                    Sensor Físico
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTriggerType("camera_event")}
+                    className={cn(
+                      "px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all flex items-center gap-1",
+                      triggerType === "camera_event"
+                        ? "bg-background text-primary shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <Cctv className="size-3" />
+                    <span>Câmera / IA</span>
                   </button>
                 </div>
               </div>
@@ -311,6 +365,59 @@ export function ManualAutomationDialog({
                       })}
                     </div>
                   </div>
+                </div>
+              ) : triggerType === "camera_event" ? (
+                /* Bloco de Gatilho por Câmera CFTV & Face ID */
+                <div className="space-y-3 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <span className="text-xs text-muted-foreground">Câmera de Monitoramento:</span>
+                      <Select value={cameraId} onValueChange={setCameraId}>
+                        <SelectTrigger className="h-9 text-xs">
+                          <SelectValue placeholder="Selecione a câmera..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {dvrCameras.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.name} ({c.roomName || c.ip})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className="text-xs text-muted-foreground">Gatilho / Evento de IA:</span>
+                      <Select
+                        value={cameraEvent}
+                        onValueChange={(v: any) => setCameraEvent(v)}
+                      >
+                        <SelectTrigger className="h-9 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="camera_motion">Movimento Geral na Câmera</SelectItem>
+                          <SelectItem value="face_recognized">Reconhecimento Facial (Morador)</SelectItem>
+                          <SelectItem value="unknown_face_detected">Pessoa Desconhecida / Não Autorizada</SelectItem>
+                          <SelectItem value="line_crossing">Invasão de Perímetro / Linha Virtual</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {cameraEvent === "face_recognized" && (
+                    <div className="space-y-1 rounded-lg border border-primary/20 bg-primary/5 p-2.5">
+                      <span className="text-[11px] text-muted-foreground block">
+                        Nome do morador específico (ou deixe em branco para qualquer morador cadastrado):
+                      </span>
+                      <Input
+                        placeholder="Ex: Eduardo, Maria..."
+                        value={targetPersonName}
+                        onChange={(e) => setTargetPersonName(e.target.value)}
+                        className="h-8 text-xs bg-background"
+                      />
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">

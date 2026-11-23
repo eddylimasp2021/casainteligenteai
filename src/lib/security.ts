@@ -144,6 +144,24 @@ export function acknowledgeAlert(householdId: string, alertId: string): void {
   saveSecurityState(current);
 }
 
+export function addSecurityAlert(
+  householdId: string,
+  alert: Omit<SecurityAlert, "id" | "timestamp" | "householdId" | "acknowledged">
+): SecurityAlert {
+  const current = getSecurityState(householdId);
+  const now = new Date().toISOString();
+  const newAlert: SecurityAlert = {
+    ...alert,
+    id: `alert-cam-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    householdId,
+    timestamp: now,
+    acknowledged: false,
+  };
+  current.alerts = [newAlert, ...current.alerts.slice(0, 25)];
+  saveSecurityState(current);
+  return newAlert;
+}
+
 export function clearAlerts(householdId: string): void {
   const current = getSecurityState(householdId);
   current.alerts = [];

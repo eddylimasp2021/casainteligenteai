@@ -42,6 +42,7 @@ import {
   clearAlerts,
   buildSecurityZones,
   updateSecurityPin,
+  addSecurityAlert,
 } from "@/lib/security";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -91,8 +92,44 @@ function SecurityPage() {
     refreshState();
 
     const handleUpdate = () => refreshState();
+    const handleCameraAiEvent = (e: any) => {
+      if (!e.detail) return;
+      const { cameraName, eventType, personName } = e.detail;
+      const isUnknown = eventType === "unknown_face_detected";
+      const isMotion = eventType === "camera_motion";
+
+      const title = isUnknown
+        ? `⚠️ Pessoa Desconhecida (${cameraName})`
+        : isMotion
+        ? `👁️ Movimento Detectado (${cameraName})`
+        : `👤 Morador Identificado: ${personName}`;
+
+      const message = isUnknown
+        ? `Intruso ou rosto não cadastrado visualizado na câmera ${cameraName}.`
+        : isMotion
+        ? `Atividade perimetral detectada em ${cameraName}.`
+        : `${personName} identificado com segurança pela câmera ${cameraName}.`;
+
+      addSecurityAlert(householdId, {
+        severity: isUnknown ? "critical" : isMotion ? "warning" : "info",
+        title,
+        message,
+        zoneName: cameraName,
+      });
+
+      if (isUnknown) {
+        toast.error(title, { description: message });
+      } else {
+        toast.info(title, { description: message });
+      }
+    };
+
     window.addEventListener("homepulse:security-state-changed", handleUpdate);
-    return () => window.removeEventListener("homepulse:security-state-changed", handleUpdate);
+    window.addEventListener("homepulse:camera-ai-event", handleCameraAiEvent);
+    return () => {
+      window.removeEventListener("homepulse:security-state-changed", handleUpdate);
+      window.removeEventListener("homepulse:camera-ai-event", handleCameraAiEvent);
+    };
   }, [householdId]);
 
   if (devices.isLoading || rooms.isLoading) return <LoadingState />;

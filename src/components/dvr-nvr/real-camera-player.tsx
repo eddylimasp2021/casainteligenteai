@@ -269,6 +269,23 @@ export function RealCameraPlayer({
           const data = await res.json();
           if (isMounted && data.faces) {
             setDetectedFaces(data.faces);
+
+            // Disparar evento para o motor de automações e alertas de segurança
+            if (data.faces.length > 0 && typeof window !== "undefined") {
+              const firstFace = data.faces[0];
+              window.dispatchEvent(
+                new CustomEvent("homepulse:camera-ai-event", {
+                  detail: {
+                    cameraId: camera.id,
+                    cameraName: camera.name,
+                    eventType: firstFace.isRecognized ? "face_recognized" : "unknown_face_detected",
+                    personName: firstFace.personName,
+                    confidence: firstFace.confidence,
+                    timestamp: new Date().toISOString(),
+                  },
+                })
+              );
+            }
           }
         }
       } catch {

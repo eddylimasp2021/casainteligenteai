@@ -12,6 +12,9 @@ import {
   Lightbulb,
   Sparkles,
   Layers,
+  Cctv,
+  Eye,
+  Radio,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -118,7 +121,13 @@ export function AutomationCard({
       <CardContent className="p-4 pt-1 space-y-3 flex-1">
         {/* Trigger Badge */}
         <div className="flex items-center gap-2 text-xs text-muted-foreground rounded-lg border bg-muted/30 px-2.5 py-1.5">
-          <Clock className="size-3.5 text-cyan-400 shrink-0" />
+          {automation.trigger.type === "camera_event" ? (
+            <Cctv className="size-3.5 text-rose-400 shrink-0" />
+          ) : automation.trigger.type === "sensor" ? (
+            <Radio className="size-3.5 text-amber-400 shrink-0" />
+          ) : (
+            <Clock className="size-3.5 text-cyan-400 shrink-0" />
+          )}
           <span className="truncate font-medium">
             {automation.trigger.type === "time" && automation.trigger.time
               ? `Horário: Diariamente às ${automation.trigger.time}`
