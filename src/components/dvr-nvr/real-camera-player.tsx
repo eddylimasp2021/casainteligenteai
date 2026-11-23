@@ -397,6 +397,20 @@ export function RealCameraPlayer({
     setErrorMessage(null);
   }, []);
 
+  // Connect Snapshot mode (Live JPEG stream directly from go2rtc frame capture)
+  const connectSnapshot = useCallback(() => {
+    disconnectStream();
+    setStreamState("connecting");
+    setErrorMessage(null);
+
+    // Initial load
+    setSnapshotTimestamp(Date.now());
+    setStreamState("playing");
+    setRealResolution("1920x1080 (HD)");
+    setRealCodec("JPEG");
+    setLatencyMs(150);
+  }, [disconnectStream]);
+
   // Connect WebRTC stream via go2rtc with H.264 transcoder fallback and decoded frame verification
   const connectWebRTC = useCallback(async () => {
     disconnectStream();
@@ -619,20 +633,6 @@ export function RealCameraPlayer({
       connectSnapshot();
     }
   }, [camera.name, connectSnapshot, disconnectStream, gatewayBase, streamName]);
-
-  // Connect Snapshot mode (Live JPEG stream directly from go2rtc frame capture, only when explicitly selected)
-  const connectSnapshot = useCallback(() => {
-    disconnectStream();
-    setStreamState("connecting");
-    setErrorMessage(null);
-
-    // Initial load
-    setSnapshotTimestamp(Date.now());
-    setStreamState("playing");
-    setRealResolution("1920x1080 (HD)");
-    setRealCodec("JPEG");
-    setLatencyMs(150);
-  }, [disconnectStream]);
 
   // Schedule next snapshot ONLY after the current frame loads/errors to guarantee max 1 in-flight request per tile
   const scheduleNextSnapshot = useCallback(() => {
