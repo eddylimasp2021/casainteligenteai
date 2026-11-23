@@ -120,6 +120,14 @@ export function MembersManagement({
     try {
       // Cria um registro de membro / convite
       const dummyUserId = `user-${Date.now()}`;
+      
+      // Salva mapeamento amigável de e-mail localmente para exibição
+      try {
+        const storedEmails = JSON.parse(localStorage.getItem("hp_member_emails") || "{}");
+        storedEmails[dummyUserId] = inviteEmail.trim();
+        localStorage.setItem("hp_member_emails", JSON.stringify(storedEmails));
+      } catch {}
+
       const { error } = await supabase.from("household_members").insert({
         household_id: householdId,
         user_id: dummyUserId,
@@ -129,7 +137,7 @@ export function MembersManagement({
       if (error) {
         toast.error(`Falha ao adicionar: ${error.message}`);
       } else {
-        toast.success(`Convite enviado para ${inviteEmail}!`);
+        toast.success(`Convite enviado com sucesso para ${inviteEmail}!`);
         setIsInviteOpen(false);
         setInviteEmail("");
         qc.invalidateQueries({ queryKey: ["household_members", householdId] });
@@ -228,6 +236,14 @@ export function MembersManagement({
             const roleInfo = (ROLES_INFO[mem.role] || ROLES_INFO.member)!;
             const Icon = roleInfo.icon;
             const isSelf = mem.user_id === currentUserId;
+            
+            let displayName = isSelf ? "Você (Conta Ativa)" : `Morador (${mem.user_id.slice(0, 8)})`;
+            try {
+              const storedEmails = JSON.parse(localStorage.getItem("hp_member_emails") || "{}");
+              if (storedEmails[mem.user_id]) {
+                displayName = storedEmails[mem.user_id];
+              }
+            } catch {}
 
             return (
               <div
@@ -236,13 +252,13 @@ export function MembersManagement({
               >
                 <div className="flex items-center gap-3.5">
                   <div className="size-10 rounded-full bg-primary/10 text-primary font-bold text-sm grid place-items-center uppercase border border-primary/20">
-                    {mem.user_id.slice(0, 2)}
+                    {displayName.slice(0, 2)}
                   </div>
 
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-foreground">
-                        {isSelf ? "Você (Conta Ativa)" : `Morador (${mem.user_id.slice(0, 8)})`}
+                      <span className="text-sm font-bold text-foreground truncate max-w-[200px] sm:max-w-xs">
+                        {displayName}
                       </span>
                       {isSelf && (
                         <Badge variant="outline" className="text-[10px] text-primary border-primary/30">
