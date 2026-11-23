@@ -118,6 +118,13 @@ if tunnel_url:
             }, pf, indent=2)
     except:
         pass
+
+    # Sincronização Instantânea em Nuvem Global (Celulares e outros PCs em qualquer rede)
+    try:
+        from cloud_sync import publish_active_gateway
+        publish_active_gateway(tunnel_url)
+    except Exception as sync_err:
+        print(f" [AVISO] Falha ao acionar sincronização em nuvem: {sync_err}")
 else:
     print(" [AVISO] O túnel demorou mais que o esperado.")
     print(" Abrindo aplicação no modo local: http://127.0.0.1:1984")

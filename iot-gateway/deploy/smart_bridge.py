@@ -161,6 +161,28 @@ class SmartTvBridgeHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(data).encode("utf-8"))
             return
 
+        elif path == "/api/cftv/status":
+            # Retorna o status do gateway e túnel ativo
+            active_tunnel = ""
+            try:
+                tunnel_file = os.path.join(os.path.dirname(__file__), "gateway_url_ativa.txt")
+                if os.path.exists(tunnel_file):
+                    with open(tunnel_file, "r", encoding="utf-8") as f:
+                        active_tunnel = f.read().strip()
+            except:
+                pass
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self._send_cors()
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                "ok": True,
+                "status": "online",
+                "active_tunnel": active_tunnel,
+                "timestamp": time.time()
+            }).encode("utf-8"))
+            return
+
         elif path == "/api/tv/discover":
             # Retorna TVs e dispositivos detectados na rede
             devices = [

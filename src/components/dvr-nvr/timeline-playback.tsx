@@ -110,11 +110,47 @@ export function TimelinePlayback({
       list.push(cleanProp);
     }
     try {
+      const syncRes = await fetch("https://ntfy.sh/homepulse-cftv-gw-eddylima-synctoken/json?poll=1&since=24h");
+      if (syncRes.ok) {
+        const text = await syncRes.text();
+        const lines = text.trim().split("\n");
+        for (let i = lines.length - 1; i >= 0; i--) {
+          const l = lines[i]?.trim();
+          if (!l) continue;
+          try {
+            const parsedEvt = JSON.parse(l);
+            if (parsedEvt.event === "message" && parsedEvt.message) {
+              const msg = parsedEvt.message.trim();
+              if (msg.startsWith("http")) {
+                const c = msg.replace(/\/+$/, "");
+                if (!list.includes(c)) list.unshift(c);
+                break;
+              }
+              const p = JSON.parse(msg);
+              const u = (p.gateway_url || p.tunnel_url || "").trim().replace(/\/+$/, "");
+              if (u && u.startsWith("http") && !list.includes(u)) {
+                list.unshift(u);
+                break;
+              }
+            }
+          } catch {}
+        }
+      }
+    } catch {}
+    try {
       const r = await fetch("/cftv_gateway.json?t=" + Date.now());
       if (r.ok) {
         const gj = await r.json();
         const jUrl = (gj?.tunnel_url || gj?.gateway_url || "").trim().replace(/\/+$/, "");
-        if (jUrl && !list.includes(jUrl)) list.unshift(jUrl);
+        if (jUrl && !list.includes(jUrl)) list.push(jUrl);
+      }
+    } catch {}
+    try {
+      const rGh = await fetch("https://raw.githubusercontent.com/eddylimasp2021/casainteligenteai/main/public/cftv_gateway.json?t=" + Date.now());
+      if (rGh.ok) {
+        const gj = await rGh.json();
+        const jUrl = (gj?.tunnel_url || gj?.gateway_url || "").trim().replace(/\/+$/, "");
+        if (jUrl && !list.includes(jUrl)) list.push(jUrl);
       }
     } catch {}
     try {

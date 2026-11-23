@@ -545,13 +545,53 @@ function DvrNvrPage() {
     setIsAutoDiscovering(true);
     const candidates: string[] = [];
 
-    // Candidato 0: public/cftv_gateway.json (Sincronizado automaticamente)
+    // Candidato 0A: Canal Global de Sincronização em Nuvem (Conexão instantânea de qualquer rede)
+    try {
+      const syncRes = await fetch("https://ntfy.sh/homepulse-cftv-gw-eddylima-synctoken/json?poll=1&since=24h");
+      if (syncRes.ok) {
+        const text = await syncRes.text();
+        const lines = text.trim().split("\n");
+        for (let i = lines.length - 1; i >= 0; i--) {
+          const l = lines[i]?.trim();
+          if (!l) continue;
+          try {
+            const parsedEvt = JSON.parse(l);
+            if (parsedEvt.event === "message" && parsedEvt.message) {
+              const msg = parsedEvt.message.trim();
+              if (msg.startsWith("http")) {
+                const c = msg.replace(/\/+$/, "");
+                if (!candidates.includes(c)) candidates.unshift(c);
+                break;
+              }
+              const p = JSON.parse(msg);
+              const u = (p.gateway_url || p.tunnel_url || "").trim().replace(/\/+$/, "");
+              if (u && u.startsWith("http") && !candidates.includes(u)) {
+                candidates.unshift(u);
+                break;
+              }
+            }
+          } catch {}
+        }
+      }
+    } catch {}
+
+    // Candidato 0B: public/cftv_gateway.json (Sincronizado automaticamente)
     try {
       const resJson = await fetch("/cftv_gateway.json?t=" + Date.now());
       if (resJson.ok) {
         const gj = await resJson.json();
         const jsonUrl = (gj?.tunnel_url || gj?.gateway_url || "").trim().replace(/\/+$/, "");
-        if (jsonUrl && !candidates.includes(jsonUrl)) candidates.unshift(jsonUrl);
+        if (jsonUrl && !candidates.includes(jsonUrl)) candidates.push(jsonUrl);
+      }
+    } catch {}
+
+    // Candidato 0C: GitHub Raw do repositório (Fallback na nuvem)
+    try {
+      const resGh = await fetch("https://raw.githubusercontent.com/eddylimasp2021/casainteligenteai/main/public/cftv_gateway.json?t=" + Date.now());
+      if (resGh.ok) {
+        const gj = await resGh.json();
+        const jsonUrl = (gj?.tunnel_url || gj?.gateway_url || "").trim().replace(/\/+$/, "");
+        if (jsonUrl && !candidates.includes(jsonUrl)) candidates.push(jsonUrl);
       }
     } catch {}
 
@@ -669,8 +709,60 @@ function DvrNvrPage() {
       }
     }
 
-    // Prioridade 0: Lê o túnel ativo sincronizado em /cftv_gateway.json
+    // Prioridade 0A: Canal Global de Sincronização em Nuvem (Qualquer rede/celular instantâneo)
+    fetch("https://ntfy.sh/homepulse-cftv-gw-eddylima-synctoken/json?poll=1&since=24h")
+      .then((res) => (res.ok ? res.text() : ""))
+      .then((raw) => {
+        if (!raw) return;
+        const lines = raw.trim().split("\n");
+        for (let i = lines.length - 1; i >= 0; i--) {
+          const l = lines[i]?.trim();
+          if (!l) continue;
+          try {
+            const parsed = JSON.parse(l);
+            if (parsed.event === "message" && parsed.message) {
+              const msg = parsed.message.trim();
+              let targetUrl = "";
+              if (msg.startsWith("http")) {
+                targetUrl = msg;
+              } else {
+                const p = JSON.parse(msg);
+                targetUrl = (p.gateway_url || p.tunnel_url || "").trim();
+              }
+              if (targetUrl && targetUrl.startsWith("http") && !targetUrl.includes("cake-studied-rendered-contemporary")) {
+                const clean = targetUrl.replace(/\/+$/, "");
+                setGatewayUrl(clean);
+                setTempGatewayUrl(clean);
+                setIsGatewayUnreachable(false);
+                try {
+                  localStorage.setItem("homepulse_dvr_gateway_url_v1", clean);
+                } catch {}
+                break;
+              }
+            }
+          } catch {}
+        }
+      })
+      .catch(() => {});
+
+    // Prioridade 0B: Lê o túnel ativo sincronizado em /cftv_gateway.json
     fetch("/cftv_gateway.json?t=" + Date.now())
+      .then((res) => (res.ok ? res.json() : null))
+      .then((gj) => {
+        const jsonUrl = (gj?.tunnel_url || gj?.gateway_url || "").trim().replace(/\/+$/, "");
+        if (jsonUrl && jsonUrl.startsWith("http")) {
+          setGatewayUrl(jsonUrl);
+          setTempGatewayUrl(jsonUrl);
+          setIsGatewayUnreachable(false);
+          try {
+            localStorage.setItem("homepulse_dvr_gateway_url_v1", jsonUrl);
+          } catch {}
+        }
+      })
+      .catch(() => {});
+
+    // Prioridade 0C: Fallback GitHub Raw em nuvem
+    fetch("https://raw.githubusercontent.com/eddylimasp2021/casainteligenteai/main/public/cftv_gateway.json?t=" + Date.now())
       .then((res) => (res.ok ? res.json() : null))
       .then((gj) => {
         const jsonUrl = (gj?.tunnel_url || gj?.gateway_url || "").trim().replace(/\/+$/, "");
@@ -709,7 +801,42 @@ function DvrNvrPage() {
         }
       });
 
-    // 2. Realtime Subscription: Se o servidor atualizar o gateway, o celular recebe na hora sem refresh!
+    // 2. Realtime SSE: Escuta atualizações de novos túneis em tempo real de qualquer máquina
+    let eventSource: EventSource | null = null;
+    try {
+      if (typeof window !== "undefined" && typeof EventSource !== "undefined") {
+        eventSource = new EventSource("https://ntfy.sh/homepulse-cftv-gw-eddylima-synctoken/sse");
+        eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.event === "message" && data.message) {
+              const msg = data.message.trim();
+              let targetUrl = "";
+              if (msg.startsWith("http")) {
+                targetUrl = msg;
+              } else {
+                const p = JSON.parse(msg);
+                targetUrl = (p.gateway_url || p.tunnel_url || "").trim();
+              }
+              if (targetUrl && targetUrl.startsWith("http") && !targetUrl.includes("cake-studied-rendered-contemporary")) {
+                const clean = targetUrl.replace(/\/+$/, "");
+                setGatewayUrl(clean);
+                setTempGatewayUrl(clean);
+                setIsGatewayUnreachable(false);
+                try {
+                  localStorage.setItem("homepulse_dvr_gateway_url_v1", clean);
+                } catch {}
+                toast.success("Gateway CFTV sincronizado em tempo real!", {
+                  description: clean,
+                });
+              }
+            }
+          } catch {}
+        };
+      }
+    } catch {}
+
+    // 3. Realtime Subscription no Supabase
     const channel = supabase
       .channel(`cftv_gateway_sync_all`)
       .on(
@@ -743,6 +870,9 @@ function DvrNvrPage() {
 
     return () => {
       supabase.removeChannel(channel);
+      if (eventSource) {
+        eventSource.close();
+      }
     };
   }, [currentId]);
 
