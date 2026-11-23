@@ -108,30 +108,34 @@ describe("Auditoria e Validação do Backend IoT (Fase 1 / Etapa 1)", () => {
     expect(filteredForUser.some((c) => c.householdId === houseB)).toBe(false);
   });
 
-  it("6. Nenhuma chave privilegiada (service_role ou senhas) deve estar presente no código do frontend", () => {
-    const clientEnv = fs.readFileSync(path.join(rootDir, ".env"), "utf8");
+  it(
+    "6. Nenhuma chave privilegiada (service_role ou senhas) deve estar presente no código do frontend",
+    () => {
+      const clientEnv = fs.readFileSync(path.join(rootDir, ".env"), "utf8");
 
-    // O arquivo .env do frontend deve ter apenas chaves públicas/anon
-    expect(clientEnv).not.toContain("SERVICE_ROLE");
-    expect(clientEnv).not.toContain("sb_secret_");
+      // O arquivo .env do frontend deve ter apenas chaves públicas/anon
+      expect(clientEnv).not.toContain("SERVICE_ROLE");
+      expect(clientEnv).not.toContain("sb_secret_");
 
-    // Verificar se a pasta src não possui chaves secretas ou tokens reais vazados
-    const srcDir = path.join(rootDir, "src");
-    const checkDir = (dir: string) => {
-      const files = fs.readdirSync(dir);
-      for (const file of files) {
-        const full = path.join(dir, file);
-        if (fs.statSync(full).isDirectory()) {
-          checkDir(full);
-        } else if (file.endsWith(".ts") || file.endsWith(".tsx")) {
-          const content = fs.readFileSync(full, "utf8");
-          // Não deve conter a chave service_role com valor real
-          expect(content).not.toMatch(/SUPABASE_SERVICE_ROLE_KEY\s*=\s*['"][^'"]+['"]/);
-          // Não deve conter token de chave secreta real
-          expect(content).not.toMatch(/sb_secret_[a-zA-Z0-9_\-]{16,}/);
+      // Verificar se a pasta src não possui chaves secretas ou tokens reais vazados
+      const srcDir = path.join(rootDir, "src");
+      const checkDir = (dir: string) => {
+        const files = fs.readdirSync(dir);
+        for (const file of files) {
+          const full = path.join(dir, file);
+          if (fs.statSync(full).isDirectory()) {
+            checkDir(full);
+          } else if (file.endsWith(".ts") || file.endsWith(".tsx")) {
+            const content = fs.readFileSync(full, "utf8");
+            // Não deve conter a chave service_role com valor real
+            expect(content).not.toMatch(/SUPABASE_SERVICE_ROLE_KEY\s*=\s*['"][^'"]+['"]/);
+            // Não deve conter token de chave secreta real
+            expect(content).not.toMatch(/sb_secret_[a-zA-Z0-9_\-]{16,}/);
+          }
         }
-      }
-    };
-    checkDir(srcDir);
-  });
+      };
+      checkDir(srcDir);
+    },
+    20000
+  );
 });

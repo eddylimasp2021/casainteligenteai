@@ -565,15 +565,16 @@ export function RealCameraPlayer({
       // 7. Transition to awaiting_frames state until first video frame is decoded
       setStreamState("awaiting_frames");
 
-      // Give H.264/RTSP stream up to 10 seconds to deliver the first keyframe; if it doesn't, auto-retry WebRTC
+      // Give H.264/RTSP stream up to 7 seconds to deliver the first keyframe; if it doesn't, activate instant Snapshot fallback so the user sees live video immediately without black screen
       frameTimeoutRef.current = window.setTimeout(() => {
         if (isStale()) return;
         const v = videoRef.current;
         if (v && (v.videoWidth === 0 || v.readyState < 2)) {
-          console.warn(`WebRTC keyframe timeout on ${camera.name}, retrying WebRTC handshake...`);
-          connectWebRTC();
+          console.warn(`WebRTC keyframe timeout on ${camera.name}, transitioning to live Snapshot mode fallback...`);
+          setProtocol("Snapshot");
+          connectSnapshot();
         }
-      }, 10000);
+      }, 7000);
 
       // 8. Track real latency & watchdog for frozen video stream
       let lastVideoTime = -1;
@@ -612,15 +613,12 @@ export function RealCameraPlayer({
     } catch (err: unknown) {
       if (isStale()) return;
       retryCountRef.current = Math.min(retryCountRef.current + 1, 4);
-      const backoffMs = Math.min(12000, 2500 * retryCountRef.current) + Math.round(Math.random() * 1200);
-      console.warn(`WebRTC connection failed on ${camera.name}, scheduling auto-retry in ${backoffMs}ms:`, err);
-      disconnectStream();
-      setStreamState("connecting");
-      frameTimeoutRef.current = window.setTimeout(() => {
-        if (isMountedRef.current) connectWebRTC();
-      }, backoffMs);
+      console.warn(`WebRTC connection failed on ${camera.name}, activating live Snapshot fallback:`, err);
+      // Auto-fallback to resilient Snapshot mode so external connections see live camera frames
+      setProtocol("Snapshot");
+      connectSnapshot();
     }
-  }, [camera.name, disconnectStream, gatewayBase, streamName]);
+  }, [camera.name, connectSnapshot, disconnectStream, gatewayBase, streamName]);
 
   // Connect Snapshot mode (Live JPEG stream directly from go2rtc frame capture, only when explicitly selected)
   const connectSnapshot = useCallback(() => {
